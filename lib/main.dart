@@ -9,7 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    await dotenv.load(fileName: '.env');
+    await dotenv.load(fileName: "assets/env");
   } catch (_) {
     // No .env file present - that's fine. The app talks to a secure proxy
     // (see _apiBase below) and no longer needs real API keys client-side,

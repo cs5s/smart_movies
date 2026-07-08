@@ -25695,7 +25695,7 @@ s=q}for(;;)switch(s){case 0:if($.V==null)A.atf()
 $.V.toString
 q=3
 s=6
-return A.G($.GJ().zW(".env"),$async$aqX)
+return A.G($.GJ().zW("assets/env"),$async$aqX)
 case 6:q=1
 s=5
 break
