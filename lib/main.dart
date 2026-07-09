@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
@@ -98,6 +99,12 @@ class AppStrings {
   String get watchEpisode       => isArabic ? 'مشاهدة الحلقة'           : 'Watch episode';
   String get watchLinkError     => isArabic ? 'تعذر فتح رابط المشاهدة'  : 'Could not open the watch link';
   String get noOverview         => isArabic ? 'لا يتوفر وصف لهذه الحلقة' : 'No description available';
+
+  // Where to watch (legal providers via TMDB/JustWatch)
+  String get whereToWatch        => isArabic ? 'أين يمكن المشاهدة'      : 'Where to Watch';
+  String get noWatchProviders     => isArabic ? 'لا تتوفر معلومات مشاهدة لهذا العمل في منطقتك'
+                                        : 'No watch info available for this title in your region';
+  String get watchProvidersError => isArabic ? 'تعذر تحميل معلومات المشاهدة' : 'Could not load watch info';
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -112,7 +119,54 @@ class SmartMoviesApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'نيرو',
       theme: ThemeData.dark(useMaterial3: true),
+      scrollBehavior: AppScrollBehavior(),
       home: const SplashScreen(),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SCROLL BEHAVIOR (enables mouse/trackpad drag-to-scroll on
+//  desktop/web/iPad, not just touch — fixes PageView only
+//  responding to the arrow buttons on PC).
+// ═══════════════════════════════════════════════════════════
+class AppScrollBehavior extends MaterialScrollBehavior {
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.unknown,
+      };
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RESPONSIVE WRAPPER
+//  Keeps the phone-style layout intact but centers it and caps
+//  its width on large screens (desktop / iPad) instead of
+//  letting it stretch full-bleed and look distorted.
+// ═══════════════════════════════════════════════════════════
+class ResponsiveShell extends StatelessWidget {
+  final Widget child;
+  final double maxWidth;
+  const ResponsiveShell({super.key, required this.child, this.maxWidth = 480});
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    if (width <= maxWidth) return child;
+    return ColoredBox(
+      color: const Color(0xFF050505),
+      child: Center(
+        child: SizedBox(
+          width: maxWidth,
+          child: Material(
+            color: const Color(0xFF050505),
+            child: child,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -181,7 +235,8 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: AnimatedBuilder(
+      body: ResponsiveShell(
+        child: AnimatedBuilder(
         animation: Listenable.merge([_fadeAnim, _glowAnim, _exitAnim]),
         builder: (context, _) => Opacity(
           opacity: 1.0 - _exitAnim.value,
@@ -239,6 +294,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
               ),
             ),
           ),
+        ),
         ),
       ),
     );
@@ -313,6 +369,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   bool _isLoading = false;
   bool _hasResult = false;
   int _currentCard = 0;
+  bool _isResolvingWatchProviders = false;
 
   List<String> _homePosterUrls = [];
   int _currentPoster = 0;
@@ -789,6 +846,58 @@ CRITICAL RULES:
     if (_pageController.hasClients) _pageController.jumpToPage(0);
   }
 
+  // ─────────────────────────────────────────────────────────
+  // "Where to Watch" — legal streaming availability for movies,
+  // sourced directly from TMDB's official watch/providers endpoint
+  // (backed by JustWatch). Opens TMDB's own watch page which lists
+  // legitimate providers (Netflix, Shahid, OSN, etc.) for the movie
+  // in the user's region, instead of pointing at unlicensed sources.
+  // ─────────────────────────────────────────────────────────
+  Future<void> _openWatchProviders(MovieCard movie) async {
+    if (_isResolvingWatchProviders) return;
+    setState(() => _isResolvingWatchProviders = true);
+    try {
+      final res = await http.get(Uri.parse(
+        '$_apiBase/tmdb/${movie.mediaType}/${movie.tmdbId}/watch/providers',
+      ));
+      if (res.statusCode != 200) {
+        debugPrint('Watch providers fetch failed: HTTP ${res.statusCode}');
+        _showMessage(s.watchProvidersError);
+        return;
+      }
+      final results = (jsonDecode(res.body)['results'] as Map?) ?? {};
+      if (results.isEmpty) {
+        _showMessage(s.noWatchProviders);
+        return;
+      }
+
+      // Prefer the Iraq region if TMDB has it, otherwise fall back to any
+      // available region — TMDB/JustWatch links are regional pages, and
+      // any of them at least gets the user to the right title.
+      Map<String, dynamic>? regionData = results['IQ'] as Map<String, dynamic>?;
+      regionData ??= results.values.first as Map<String, dynamic>?;
+
+      final link = regionData?['link'] as String?;
+      if (link == null || link.isEmpty) {
+        _showMessage(s.noWatchProviders);
+        return;
+      }
+
+      final url = Uri.parse(link);
+      final canOpen = await canLaunchUrl(url);
+      if (canOpen) {
+        launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        _showMessage(s.watchProvidersError);
+      }
+    } catch (e) {
+      debugPrint('Watch providers error: $e');
+      _showMessage(s.watchProvidersError);
+    } finally {
+      if (mounted) setState(() => _isResolvingWatchProviders = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -796,22 +905,45 @@ CRITICAL RULES:
       backgroundColor: _darkBg,
       drawer: _buildDrawer(),
       body: SafeArea(
-        child: Column(
+        child: ResponsiveShell(
+          child: Stack(
           children: [
-            _buildHeader(),
-            const SizedBox(height: 10),
-            Expanded(child: _buildMainContent()),
-            _buildSearchBar(),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: GestureDetector(
-                onTap: _showAbout,
-                child: const Text('© علي الأسدي',
-                  style: TextStyle(color: Colors.white24, fontSize: 11,
-                    decoration: TextDecoration.underline, decorationColor: Colors.white24)),
-              ),
+            Column(
+              children: [
+                _buildHeader(),
+                const SizedBox(height: 10),
+                Expanded(child: _buildMainContent()),
+                _buildSearchBar(),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: GestureDetector(
+                    onTap: _showAbout,
+                    child: const Text('© علي الأسدي',
+                      style: TextStyle(color: Colors.white24, fontSize: 11,
+                        decoration: TextDecoration.underline, decorationColor: Colors.white24)),
+                  ),
+                ),
+              ],
             ),
+            if (_isResolvingWatchProviders)
+              Container(
+                color: Colors.black.withOpacity(0.6),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const CircularProgressIndicator(color: _accent, strokeWidth: 3),
+                      const SizedBox(height: 16),
+                      Text(
+                        _isArabic ? 'جاري تجهيز رابط المشاهدة...' : 'Preparing the watch link...',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
+          ),
         ),
       ),
     );
@@ -937,6 +1069,10 @@ CRITICAL RULES:
                               ),
                             ),
                           )
+                      : null,
+                  watchLabel: s.whereToWatch,
+                  onWatchTap: _movies[index].mediaType == 'movie'
+                      ? () => _openWatchProviders(_movies[index])
                       : null,
                 ),
               ),
@@ -1378,6 +1514,8 @@ class _MovieCardWidget extends StatelessWidget {
   final void Function(String) onShowMessage;
   final String seasonsLabel;
   final VoidCallback? onSeasonsTap;
+  final String watchLabel;
+  final VoidCallback? onWatchTap;
 
   const _MovieCardWidget({
     required this.movie, required this.isFav, required this.onFavTap,
@@ -1385,6 +1523,7 @@ class _MovieCardWidget extends StatelessWidget {
     required this.noTrailerMessage, required this.trailerErrorMessage,
     required this.onShowMessage,
     required this.seasonsLabel, this.onSeasonsTap,
+    required this.watchLabel, this.onWatchTap,
   });
 
   @override
@@ -1531,6 +1670,23 @@ class _MovieCardWidget extends StatelessWidget {
                       ),
                     ),
                   ],
+                  if (onWatchTap != null) ...[
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 40,
+                      child: OutlinedButton.icon(
+                        onPressed: onWatchTap,
+                        icon: const Icon(Icons.live_tv_rounded, size: 18, color: Colors.white),
+                        label: Text(watchLabel,
+                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: Colors.white.withOpacity(0.3)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1660,7 +1816,7 @@ class _SeasonsScreenState extends State<SeasonsScreen> {
         title: Text(widget.showTitle, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: _isLoading
+      body: ResponsiveShell(child: _isLoading
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1702,6 +1858,7 @@ class _SeasonsScreenState extends State<SeasonsScreen> {
                     );
                   },
                 ),
+      ),
     );
   }
 }
@@ -1896,7 +2053,7 @@ class _EpisodesScreenState extends State<EpisodesScreen> {
           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: Stack(
+      body: ResponsiveShell(child: Stack(
         children: [
           _buildBody(),
           if (_isResolvingLink)
@@ -1917,6 +2074,7 @@ class _EpisodesScreenState extends State<EpisodesScreen> {
               ),
             ),
         ],
+      ),
       ),
     );
   }
