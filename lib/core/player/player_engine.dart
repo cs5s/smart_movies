@@ -6,20 +6,21 @@ class PlayerEngine {
   PlayerEngine._internal();
 
   Future<void> openMovie(BuildContext context, int tmdbId) async {
-    final url = Uri.parse('https://vidsrc.pro/embed/movie/$tmdbId');
+   final url = Uri.parse('https://vidsrc.cc/v2/embed/movie/$tmdbId');
     await _launch(url, context);
   }
 
   Future<void> openEpisode(BuildContext context, int tmdbId, int season, int episode) async {
-    final url = Uri.parse('https://vidsrc.pro/embed/tv/$tmdbId/$season/$episode');
+    final url = Uri.parse('https://vidsrc.cc/v2/embed/tv/$tmdbId/$season/$episode');
     await _launch(url, context);
   }
 
-  Future<void> _launch(Uri url, BuildContext context) async {
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر فتح الرابط')));
-    }
+  // عدل دالة _launch في ملف player_engine.dart لتجربة رابط يفتح في صفحة "نظيفة"
+Future<void> _launch(Uri url, BuildContext context) async {
+  // استخدام mode: LaunchMode.externalApplication هو الأفضل حالياً
+  if (await canLaunchUrl(url)) {
+    await launchUrl(url, mode: LaunchMode.externalApplication);
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر الوصول')));
   }
 }
