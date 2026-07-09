@@ -1034,7 +1034,9 @@ CRITICAL RULES:
                           )
                       : null,
                   watchLabel: s.whereToWatch,
-                  onWatchTap: () => PlayerEngine.instance.openMovie(context, movie.tmdbId),
+                 onWatchTap: _movies[index].mediaType == 'movie' 
+    ? () => PlayerEngine.instance.openMovie(context, _movies[index].tmdbId) 
+    : null,
                 ),
               ),
               ),
