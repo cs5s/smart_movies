@@ -146,9 +146,8 @@ class AppScrollBehavior extends MaterialScrollBehavior {
 
 // ═══════════════════════════════════════════════════════════
 //  RESPONSIVE WRAPPER
-//  Keeps the phone-style layout intact but centers it and caps
-//  its width on large screens (desktop / iPad) instead of
-//  letting it stretch full-bleed and look distorted.
+//  Keeps the phone-style layout intact but centers it and lets
+//  it scale to full screen height on desktop / iPad screens.
 // ═══════════════════════════════════════════════════════════
 class ResponsiveShell extends StatelessWidget {
   final Widget child;
@@ -164,7 +163,7 @@ class ResponsiveShell extends StatelessWidget {
       child: Center(
         child: SizedBox(
           width: maxWidth,
-          height: double.infinity, // يعود ليأخذ الطول الكامل فتبدو الأبعاد فخمة
+          height: double.infinity,
           child: Material(
             color: const Color(0xFF050505),
             child: child,
