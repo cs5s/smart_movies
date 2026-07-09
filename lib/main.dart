@@ -860,41 +860,48 @@ CRITICAL RULES:
     if (_isResolvingWatchProviders) return;
     setState(() => _isResolvingWatchProviders = true);
     try {
-      final res = await http.get(Uri.parse(
-        '$_apiBase/tmdb/${movie.mediaType}/${movie.tmdbId}/watch/providers',
-      ));
-      if (res.statusCode != 200) {
-        debugPrint('Watch providers fetch failed: HTTP ${res.statusCode}');
-        _showMessage(s.watchProvidersError);
-        return;
-      }
-      final results = (jsonDecode(res.body)['results'] as Map?) ?? {};
-      if (results.isEmpty) {
-        _showMessage(s.noWatchProviders);
-        return;
-      }
+      final String vidsrcUrl = 'https://vidsrc.pro/embed/movie/${movie.tmdbId}';
 
-      // Prefer the Iraq region if TMDB has it, otherwise fall back to any
-      // available region — TMDB/JustWatch links are regional pages, and
-      // any of them at least gets the user to the right title.
-      Map<String, dynamic>? regionData = results['IQ'] as Map<String, dynamic>?;
-      regionData ??= results.values.first as Map<String, dynamic>?;
+      if (!mounted) return;
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.black,
+        isScrollControlled: true,
+        useSafeArea: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        builder: (context) => Container(
+          height: MediaQuery.of(context).size.height * 0.85,
+          padding: const EdgeInsets.only(top: 8),
+          child: Column(
+            children: [
+              Container(
+                width: 40, height: 4,
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+              ),
+              Expanded(
+                child: HtmlElementView(viewType: 'vidsrc-movie-${movie.tmdbId}'),
+              ),
+            ],
+          ),
+        ),
+      );
 
-      final link = regionData?['link'] as String?;
-      if (link == null || link.isEmpty) {
-        _showMessage(s.noWatchProviders);
-        return;
-      }
-
-      final url = Uri.parse(link);
-      final canOpen = await canLaunchUrl(url);
-      if (canOpen) {
-        launchUrl(url, mode: LaunchMode.externalApplication);
-      } else {
-        _showMessage(s.watchProvidersError);
-      }
-    } catch (e) {
-      debugPrint('Watch providers error: $e');
+      // ignore: undefined_prefixed_name
+      ui_web.platformViewRegistry.registerViewFactory(
+        'vidsrc-movie-${movie.tmdbId}',
+        (int viewId) {
+          return html.IFrameElement()
+            ..src = vidsrcUrl
+            ..style.border = 'none'
+            ..style.width = '100%'
+            ..style.height = '100%'
+            ..setAttribute('allowfullscreen', 'true'); // تشغيل حر بدون sandbox خانق للويب
+        },
+      );
+    } catch (_) {
       _showMessage(s.watchProvidersError);
     } finally {
       if (mounted) setState(() => _isResolvingWatchProviders = false);
@@ -2058,19 +2065,14 @@ class _EpisodesScreenState extends State<EpisodesScreen> {
       ui_web.platformViewRegistry.registerViewFactory(
         'vidsrc-player-${widget.tmdbId}-${episode.episodeNumber}',
         (int viewId) {
-          final element = html.IFrameElement()
+          return html.IFrameElement()
             ..src = vidsrcUrl
             ..style.border = 'none'
             ..style.width = '100%'
-            ..style.height = '100%';
-            
-          // إضافة التراخيص الأساسية المحدثة لتشغيل الفيديو بدون كسر السيرفر
-          element.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-presentation allow-modals');
-          element.setAttribute('allowfullscreen', 'true'); // للسماح بتكبير الشاشة
-          return element;
+            ..style.height = '100%'
+            ..setAttribute('allowfullscreen', 'true'); // يضمن تفعيل المشغلات وفك التشفير عالمتصفح فوراً
         },
       );
-
     } catch (e) {
       debugPrint('Error launching secure player: $e');
       _showMessage(s.watchLinkError);
