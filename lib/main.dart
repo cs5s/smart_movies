@@ -7,7 +7,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-
+import 'core/player/player_engine.dart'; // أضف هذا السطر مع باقي الـ imports
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:ui_web' as ui_web; // هذا هو البديل الرسمي الحديث للويب
 // ═══════════════════════════════════════════════════════════
@@ -358,6 +358,22 @@ class HomePage extends StatefulWidget {
   @override
   State<HomePage> createState() => _HomePageState();
 }
+
+// دالة موحدة لفتح روابط البث بشكل آمن في المتصفح الخارجي
+  Future<void> _launchSecurePlayer(String urlString) async {
+    final Uri url = Uri.parse(urlString);
+    try {
+      if (await canLaunchUrl(url)) {
+        // الفتح في المتصفح الافتراضي (Chrome/Safari) سيسمح لمتصفحك بحظر الإعلانات 
+        // ويضمن تشغيل الفيديو بدون مشاكل الـ IFrame
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        _showMessage(s.watchLinkError);
+      }
+    } catch (e) {
+      _showMessage(s.watchLinkError);
+    }
+  }
 
 class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
@@ -856,23 +872,7 @@ CRITICAL RULES:
   // legitimate providers (Netflix, Shahid, OSN, etc.) for the movie
   // in the user's region, instead of pointing at unlicensed sources.
   // ─────────────────────────────────────────────────────────
-  Future<void> _openWatchProviders(MovieCard movie) async {
-    if (_isResolvingWatchProviders) return;
-    setState(() => _isResolvingWatchProviders = true);
-    try {
-      final url = Uri.parse('https://vidsrc.pro/embed/movie/${movie.tmdbId}');
-      if (await canLaunchUrl(url)) {
-        // الفتح في علامة تبويب جديدة مستقلة ونظيفة
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      } else {
-        _showMessage(s.watchProvidersError);
-      }
-    } catch (_) {
-      _showMessage(s.watchProvidersError);
-    } finally {
-      if (mounted) setState(() => _isResolvingWatchProviders = false);
-    }
-  }
+  
 
   @override
   Widget build(BuildContext context) {
@@ -1049,9 +1049,7 @@ CRITICAL RULES:
                           )
                       : null,
                   watchLabel: s.whereToWatch,
-                  onWatchTap: _movies[index].mediaType == 'movie'
-                      ? () => _openWatchProviders(_movies[index])
-                      : null,
+                  onWatchTap: _movies[index].mediaType == 'movie' ? () => PlayerEngine.instance.openMovie(context, _movies[index].tmdbId) : null,
                 ),
               ),
               ),
@@ -1986,25 +1984,7 @@ class _EpisodesScreenState extends State<EpisodesScreen> {
 
   bool _isResolvingLink = false;
 
- Future<void> _openEpisode(EpisodeInfo episode) async {
-    if (_isResolvingLink) return;
-    setState(() => _isResolvingLink = true);
-    try {
-      final url = Uri.parse(
-          'https://vidsrc.pro/embed/tv/${widget.tmdbId}/${widget.seasonNumber}/${episode.episodeNumber}');
-          
-      if (await canLaunchUrl(url)) {
-        // الفتح في علامة تبويب جديدة مستقلة ونظيفة
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      } else {
-        _showMessage(s.watchLinkError);
-      }
-    } catch (e) {
-      _showMessage(s.watchLinkError);
-    } finally {
-      if (mounted) setState(() => _isResolvingLink = false);
-    }
-  }
+ 
 
   @override
   Widget build(BuildContext context) {
@@ -2066,7 +2046,7 @@ class _EpisodesScreenState extends State<EpisodesScreen> {
                       episodeLabel: s.episode,
                       watchLabel: s.watchEpisode,
                       noOverviewLabel: s.noOverview,
-                      onTap: () => _openEpisode(episode),
+                     onTap: () => PlayerEngine.instance.openEpisode(context, widget.tmdbId, widget.seasonNumber, episode.episodeNumber),
                     );
                   },
                 );
