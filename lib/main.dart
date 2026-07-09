@@ -2031,17 +2031,14 @@ class _EpisodesScreenState extends State<EpisodesScreen> {
 
   bool _isResolvingLink = false;
 
-  Future<void> _openEpisode(EpisodeInfo episode) async {
-    if (_isResolvingLink) return; // تفادي النقرات المزدوجة أثناء التحميل
+ Future<void> _openEpisode(EpisodeInfo episode) async {
+    if (_isResolvingLink) return;
     setState(() => _isResolvingLink = true);
 
     try {
-      // 1. توليد رابط البث العالمي المترجم مباشرة باستخدام الـ TMDB ID
-      // هذا السيرفر مستقر جداً ويدعم الترجمة العربية التلقائية
       final String vidsrcUrl = 
           'https://vidsrc.pro/embed/tv/${widget.tmdbId}/${widget.seasonNumber}/${episode.episodeNumber}';
 
-      // 2. صناعة شاشة بث منبثقة داخل التطبيق (Modal Bottom Sheet) كمشغل فيديو ذكي
       if (!mounted) return;
       showModalBottomSheet(
         context: context,
@@ -2056,7 +2053,6 @@ class _EpisodesScreenState extends State<EpisodesScreen> {
           padding: const EdgeInsets.only(top: 8),
           child: Column(
             children: [
-              // مقبض سحب علوي للشاشة المنبثقة
               Container(
                 width: 40,
                 height: 4,
@@ -2066,14 +2062,9 @@ class _EpisodesScreenState extends State<EpisodesScreen> {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              // المشغل الفعلي للحلقة بداخل واجهة الويب المحمية
               Expanded(
                 child: HtmlElementView(
                   viewType: 'vidsrc-player-${widget.tmdbId}-${episode.episodeNumber}',
-                  // نقوم بتسجيل العنصر برمجياً لحظر فتح النوافذ الإعلانية المنبثقة (Pop-ups)
-                  onPlatformViewCreated: (_) {
-                    // السيستم يمنع الـ scripts الخارجية من فتح نوافذ جديدة بالمتصفح
-                  },
                 ),
               ),
             ],
@@ -2081,7 +2072,6 @@ class _EpisodesScreenState extends State<EpisodesScreen> {
         ),
       );
 
-      // تسجيل الـ iframe برمجياً لنسخة الويب لتعمل كـ Sandbox محمي وخانق للإعلانات
       // ignore: undefined_prefixed_name
       ui.platformViewRegistry.registerViewFactory(
         'vidsrc-player-${widget.tmdbId}-${episode.episodeNumber}',
@@ -2090,14 +2080,9 @@ class _EpisodesScreenState extends State<EpisodesScreen> {
             ..src = vidsrcUrl
             ..style.border = 'none'
             ..style.width = '100%'
-            ..style.height = '100%'
-            // تفعيل ميزة الـ Sandbox لمنع فتح الإعلانات والـ Pop-ups نهائياً خارج الحلقة
-            ..sandbox!.addAll([
-              'allow-scripts',
-              'allow-same-origin',
-              'allow-forms',
-              'allow-presentation'
-            ]);
+            ..style.height = '100%';
+            
+          element.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-presentation');
           return element;
         },
       );
@@ -2142,11 +2127,9 @@ class _EpisodesScreenState extends State<EpisodesScreen> {
               ),
             ),
         ],
-      ),
-      ),
+      )),
     );
   }
-
   Widget _buildBody() {
     return _isLoading
           ? Center(
