@@ -8,10 +8,12 @@
  * to publish the Flutter app's source (and this file) on GitHub.
  *
  * Routes:
- *   POST /groq                     -> forwards to Groq chat completions
- *   GET  /tmdb/search/multi        -> forwards to TMDB search
- *   GET  /tmdb/:mediaType/:id      -> forwards to TMDB details
+ *   POST /groq                       -> forwards to Groq chat completions
+ *   GET  /tmdb/search/multi          -> forwards to TMDB search
+ *   GET  /tmdb/:mediaType/:id        -> forwards to TMDB details
  *   GET  /tmdb/:mediaType/:id/videos -> forwards to TMDB videos
+ *   GET  /vodu-lookup?title=...      -> looks up (and caches) a Vodu page
+ *                                        for the given show title
  *
  * Setup:
  *   1. npm install -g wrangler
@@ -19,8 +21,10 @@
  *   3. wrangler init nero-proxy   (or copy this file into an existing worker)
  *   4. wrangler secret put GROQ_API_KEY
  *   5. wrangler secret put TMDB_API_KEY
- *   6. wrangler deploy
- *   7. Copy the resulting *.workers.dev URL into `_defaultApiBase` in main.dart
+ *   6. wrangler kv:namespace create VODU_CACHE
+ *      -> paste the returned id into wrangler.toml (see wrangler.toml in this repo)
+ *   7. wrangler deploy
+ *   8. Copy the resulting *.workers.dev URL into `defaultApiBase` in main.dart
  */
 
 const CORS_HEADERS = {
@@ -28,6 +32,76 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
+
+function jsonResponse(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+  });
+}
+
+// Normalizes a title so "Breaking Bad", "breaking bad ", "BREAKING BAD" all
+// hit the same cache entry instead of being looked up (and scraped) again.
+function cacheKeyFor(title) {
+  return `vodu:${title.trim().toLowerCase().replace(/\s+/g, " ")}`;
+}
+
+async function handleVoduLookup(url, env) {
+  const title = (url.searchParams.get("title") || "").trim();
+  if (!title) {
+    return jsonResponse({ error: "Missing 'title' query parameter" }, 400);
+  }
+
+  const key = cacheKeyFor(title);
+  const searchUrl =
+    `https://movie.vodu.me/index.php?do=search&subaction=search&story=${encodeURIComponent(title)}`;
+
+  // 1. Serve from cache if we've already resolved this title before.
+  if (env.VODU_CACHE) {
+    try {
+      const cached = await env.VODU_CACHE.get(key);
+      if (cached) {
+        return jsonResponse({ url: cached, matched: true, cached: true });
+      }
+    } catch (e) {
+      // KV not bound or unavailable - fall through and do a live lookup.
+    }
+  }
+
+  // 2. Live lookup: fetch Vodu's own search results page and pull out the
+  //    first post link. This is plain URL/ID extraction (no article text
+  //    or other content is read or stored) - just enough to build a link.
+  try {
+    const res = await fetch(searchUrl, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; NeroApp/1.0)" },
+    });
+
+    if (!res.ok) {
+      return jsonResponse({ url: searchUrl, matched: false, cached: false });
+    }
+
+    const html = await res.text();
+    const match = html.match(/index\.php\?do=view&type=post&id=(\d+)/i);
+
+    if (match) {
+      const directUrl = `https://movie.vodu.me/index.php?do=view&type=post&id=${match[1]}`;
+      if (env.VODU_CACHE) {
+        try {
+          await env.VODU_CACHE.put(key, directUrl);
+        } catch (e) {
+          // Caching failed - not fatal, we still return the resolved URL.
+        }
+      }
+      return jsonResponse({ url: directUrl, matched: true, cached: false });
+    }
+
+    // No result found on Vodu - hand back the search page itself so the
+    // user can search/browse manually instead of hitting a dead end.
+    return jsonResponse({ url: searchUrl, matched: false, cached: false });
+  } catch (err) {
+    return jsonResponse({ url: searchUrl, matched: false, error: err.message });
+  }
+}
 
 export default {
   async fetch(request, env) {
@@ -61,11 +135,9 @@ export default {
         const tmdbPath = url.pathname.replace("/tmdb", "");
         const tmdbUrl = new URL(`https://api.themoviedb.org/3${tmdbPath}`);
 
-        // Copy through all incoming query params (query, language, etc.)
         for (const [key, value] of url.searchParams) {
           tmdbUrl.searchParams.set(key, value);
         }
-        // Always set the real key server-side, overriding anything a client sent.
         tmdbUrl.searchParams.set("api_key", env.TMDB_API_KEY);
 
         const upstream = await fetch(tmdbUrl.toString());
@@ -76,15 +148,14 @@ export default {
         });
       }
 
-      return new Response(JSON.stringify({ error: "Not found" }), {
-        status: 404,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      });
+      // ---- Vodu lookup (with caching) ----
+      if (url.pathname === "/vodu-lookup" && request.method === "GET") {
+        return await handleVoduLookup(url, env);
+      }
+
+      return jsonResponse({ error: "Not found" }, 404);
     } catch (err) {
-      return new Response(JSON.stringify({ error: err.message }), {
-        status: 500,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: err.message }, 500);
     }
   },
 };

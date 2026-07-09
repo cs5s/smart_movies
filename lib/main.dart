@@ -6,6 +6,37 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+// ═══════════════════════════════════════════════════════════
+//  API CONFIG
+// ═══════════════════════════════════════════════════════════
+class ApiConfig {
+  // The Cloudflare Worker proxy that holds the real Groq/TMDB keys.
+  static const String defaultApiBase = 'https://smart-movies-proxy.fm76400076.workers.dev';
+  static String get apiBase {
+    final override = dotenv.env['API_BASE_URL'];
+    return (override != null && override.isNotEmpty) ? override : defaultApiBase;
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // VODU integration
+  // ─────────────────────────────────────────────────────────
+  // Vodu doesn't expose a public API mapping TMDB IDs to its own internal
+  // post IDs, so resolving a show's Vodu page happens server-side in the
+  // Worker (see worker.js -> /vodu-lookup). The Worker looks up the show
+  // by title, extracts the direct link, and caches it (via KV) so the
+  // same title isn't looked up again on future requests - no manual ID
+  // list to maintain here.
+  static Future<Map<String, dynamic>> lookupVoduUrl(String showTitle) async {
+    final res = await http.get(Uri.parse(
+      '$apiBase/vodu-lookup?title=${Uri.encodeComponent(showTitle)}',
+    ));
+    if (res.statusCode != 200) {
+      throw Exception('Vodu lookup failed: HTTP ${res.statusCode}');
+    }
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
@@ -54,6 +85,19 @@ class AppStrings {
   String get trailerError  => isArabic ? 'تعذر فتح رابط التريلر'  : 'Could not open the trailer link';
   String get noTrailer     => isArabic ? 'لا يتوفر تريلر لهذا العمل' : 'No trailer available for this title';
   String get linkError     => isArabic ? 'تعذر فتح الرابط'         : 'Could not open the link';
+
+  // Seasons & Episodes
+  String get seasonsAndEpisodes => isArabic ? 'المواسم والحلقات'        : 'Seasons & Episodes';
+  String get season             => isArabic ? 'الموسم'                  : 'Season';
+  String get episode            => isArabic ? 'الحلقة'                  : 'Episode';
+  String get episodes           => isArabic ? 'حلقة'                    : 'episodes';
+  String get loadingSeasons     => isArabic ? 'جاري تحميل المواسم...'   : 'Loading seasons...';
+  String get loadingEpisodes    => isArabic ? 'جاري تحميل الحلقات...'  : 'Loading episodes...';
+  String get seasonsLoadError   => isArabic ? 'تعذر تحميل المواسم'      : 'Could not load seasons';
+  String get episodesLoadError  => isArabic ? 'تعذر تحميل الحلقات'     : 'Could not load episodes';
+  String get watchEpisode       => isArabic ? 'مشاهدة الحلقة'           : 'Watch episode';
+  String get watchLinkError     => isArabic ? 'تعذر فتح رابط المشاهدة'  : 'Could not open the watch link';
+  String get noOverview         => isArabic ? 'لا يتوفر وصف لهذه الحلقة' : 'No description available';
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -215,6 +259,8 @@ class MovieCard {
   final String genres;
   final String genresEn;
   final String trailerUrl;
+  final int tmdbId;
+  final String mediaType; // 'tv' or 'movie'
 
   MovieCard({
     required this.titleAr, required this.titleEn,
@@ -222,6 +268,7 @@ class MovieCard {
     required this.storyEn, required this.imageUrl,
     required this.rating,  required this.genres,
     required this.genresEn,required this.trailerUrl,
+    required this.tmdbId,  required this.mediaType,
   });
 
   Map<String, dynamic> toMap() => {
@@ -230,6 +277,7 @@ class MovieCard {
     'imageUrl': imageUrl, 'rating': rating,
     'genres': genres,   'genresEn': genresEn,
     'trailerUrl': trailerUrl,
+    'tmdbId': tmdbId,   'mediaType': mediaType,
   };
 
   factory MovieCard.fromMap(Map<String, dynamic> map) => MovieCard(
@@ -238,6 +286,7 @@ class MovieCard {
     storyEn: map['storyEn'] ?? '',  imageUrl: map['imageUrl'] ?? '',
     rating: map['rating'] ?? '',    genres: map['genres'] ?? '',
     genresEn: map['genresEn'] ?? '',trailerUrl: map['trailerUrl'] ?? '',
+    tmdbId: map['tmdbId'] ?? 0,     mediaType: map['mediaType'] ?? 'movie',
   );
 }
 
@@ -278,18 +327,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   late PageController _pageController;
 
   // Base URL of the secure proxy (a Cloudflare Worker, see worker.js) that
-  // holds the real Groq/TMDB API keys server-side. The Flutter app itself
-  // never sees or sends the real keys, so this code is safe to publish
-  // publicly on GitHub and run as a public website.
-  //
-  // Replace this with your own deployed Worker URL after following the
-  // steps in README.md. It can also be overridden via .env (API_BASE_URL)
-  // for local development if you prefer.
-  static const String _defaultApiBase = 'https://smart-movies-proxy.fm76400076.workers.dev';
-  String get _apiBase {
-    final override = dotenv.env['API_BASE_URL'];
-    return (override != null && override.isNotEmpty) ? override : _defaultApiBase;
-  }
+  // holds the real Groq/TMDB API keys server-side. Delegates to ApiConfig
+  // so the SeasonsScreen/EpisodesScreen widgets can use the exact same base.
+  String get _apiBase => ApiConfig.apiBase;
 
   static const List<Map<String, String>> _featuredTitles = [
     {'title': 'Interstellar',    'type': 'movie'},
@@ -665,6 +705,8 @@ CRITICAL RULES:
         imageUrl: posterPath.isNotEmpty ? 'https://image.tmdb.org/t/p/w500$posterPath' : '',
         rating: rating, genres: genres, genresEn: genresEn,
         trailerUrl: trailerUrl,
+        tmdbId: id is int ? id : int.tryParse(id.toString()) ?? 0,
+        mediaType: mediaType,
       );
     } catch (e) {
       debugPrint('_fetchFromTmdb error for "$titleQuery": $e');
@@ -883,6 +925,19 @@ CRITICAL RULES:
                   noTrailerMessage: s.noTrailer,
                   trailerErrorMessage: s.trailerError,
                   onShowMessage: _showMessage,
+                  seasonsLabel: s.seasonsAndEpisodes,
+                  onSeasonsTap: _movies[index].mediaType == 'tv'
+                      ? () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => SeasonsScreen(
+                                tmdbId: _movies[index].tmdbId,
+                                showTitle: _isArabic ? _movies[index].titleAr : _movies[index].titleEn,
+                                isArabic: _isArabic,
+                              ),
+                            ),
+                          )
+                      : null,
                 ),
               ),
               if (_currentCard < _movies.length - 1)
@@ -1321,12 +1376,15 @@ class _MovieCardWidget extends StatelessWidget {
   final String noTrailerMessage;
   final String trailerErrorMessage;
   final void Function(String) onShowMessage;
+  final String seasonsLabel;
+  final VoidCallback? onSeasonsTap;
 
   const _MovieCardWidget({
     required this.movie, required this.isFav, required this.onFavTap,
     required this.trailerLabel, required this.isArabic,
     required this.noTrailerMessage, required this.trailerErrorMessage,
     required this.onShowMessage,
+    required this.seasonsLabel, this.onSeasonsTap,
   });
 
   @override
@@ -1456,6 +1514,538 @@ class _MovieCardWidget extends StatelessWidget {
                   Text(displayStory, maxLines: 3, overflow: TextOverflow.ellipsis,
                     textAlign: isArabic ? TextAlign.right : TextAlign.left,
                     style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 13, height: 1.5)),
+                  if (onSeasonsTap != null) ...[
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 40,
+                      child: OutlinedButton.icon(
+                        onPressed: onSeasonsTap,
+                        icon: const Icon(Icons.video_library_rounded, size: 18, color: Colors.white),
+                        label: Text(seasonsLabel,
+                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: Colors.white.withOpacity(0.3)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SEASON / EPISODE MODELS
+// ═══════════════════════════════════════════════════════════
+class SeasonInfo {
+  final int seasonNumber;
+  final String name;
+  final int episodeCount;
+  final String posterPath;
+  final String overview;
+
+  SeasonInfo({
+    required this.seasonNumber, required this.name,
+    required this.episodeCount, required this.posterPath,
+    required this.overview,
+  });
+
+  factory SeasonInfo.fromJson(Map<String, dynamic> j) => SeasonInfo(
+    seasonNumber: j['season_number'] ?? 0,
+    name: j['name'] ?? '',
+    episodeCount: j['episode_count'] ?? 0,
+    posterPath: j['poster_path'] ?? '',
+    overview: j['overview'] ?? '',
+  );
+}
+
+class EpisodeInfo {
+  final int episodeNumber;
+  final String name;
+  final String overview;
+  final String stillPath;
+  final String airDate;
+  final double rating;
+
+  EpisodeInfo({
+    required this.episodeNumber, required this.name,
+    required this.overview,      required this.stillPath,
+    required this.airDate,       required this.rating,
+  });
+
+  factory EpisodeInfo.fromJson(Map<String, dynamic> j) => EpisodeInfo(
+    episodeNumber: j['episode_number'] ?? 0,
+    name: j['name'] ?? '',
+    overview: j['overview'] ?? '',
+    stillPath: j['still_path'] ?? '',
+    airDate: j['air_date'] ?? '',
+    rating: (j['vote_average'] ?? 0.0).toDouble(),
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SEASONS SCREEN
+// ═══════════════════════════════════════════════════════════
+class SeasonsScreen extends StatefulWidget {
+  final int tmdbId;
+  final String showTitle;
+  final bool isArabic;
+
+  const SeasonsScreen({
+    super.key, required this.tmdbId,
+    required this.showTitle, required this.isArabic,
+  });
+
+  @override
+  State<SeasonsScreen> createState() => _SeasonsScreenState();
+}
+
+class _SeasonsScreenState extends State<SeasonsScreen> {
+  static const Color _accent = Color(0xFFE50914);
+  static const Color _darkBg = Color(0xFF050505);
+
+  List<SeasonInfo> _seasons = [];
+  bool _isLoading = true;
+  bool _hasError = false;
+
+  AppStrings get s => AppStrings(widget.isArabic);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSeasons();
+  }
+
+  Future<void> _loadSeasons() async {
+    try {
+      final lang = widget.isArabic ? 'ar' : 'en-US';
+      final res = await http.get(Uri.parse(
+        '${ApiConfig.apiBase}/tmdb/tv/${widget.tmdbId}?language=$lang',
+      ));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final seasonsJson = (data['seasons'] as List?) ?? [];
+        final seasons = seasonsJson
+            .map((j) => SeasonInfo.fromJson(j))
+            .where((season) => season.seasonNumber > 0) // hide "Specials"
+            .toList();
+        if (!mounted) return;
+        setState(() { _seasons = seasons; _isLoading = false; });
+      } else {
+        debugPrint('Seasons load failed: HTTP ${res.statusCode}');
+        if (!mounted) return;
+        setState(() { _isLoading = false; _hasError = true; });
+      }
+    } catch (e) {
+      debugPrint('Seasons load error: $e');
+      if (!mounted) return;
+      setState(() { _isLoading = false; _hasError = true; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _darkBg,
+      appBar: AppBar(
+        backgroundColor: _darkBg,
+        elevation: 0,
+        title: Text(widget.showTitle, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: _isLoading
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const CircularProgressIndicator(color: _accent, strokeWidth: 3),
+                  const SizedBox(height: 16),
+                  Text(s.loadingSeasons, style: TextStyle(color: Colors.white.withOpacity(0.6))),
+                ],
+              ),
+            )
+          : _hasError || _seasons.isEmpty
+              ? Center(
+                  child: Text(
+                    s.seasonsLoadError,
+                    style: const TextStyle(color: Colors.white54),
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _seasons.length,
+                  itemBuilder: (context, index) {
+                    final season = _seasons[index];
+                    return _SeasonTile(
+                      season: season,
+                      isArabic: widget.isArabic,
+                      episodesLabel: s.episodes,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => EpisodesScreen(
+                            tmdbId: widget.tmdbId,
+                            seasonNumber: season.seasonNumber,
+                            showTitle: widget.showTitle,
+                            seasonName: season.name,
+                            isArabic: widget.isArabic,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+    );
+  }
+}
+
+class _SeasonTile extends StatelessWidget {
+  final SeasonInfo season;
+  final bool isArabic;
+  final String episodesLabel;
+  final VoidCallback onTap;
+
+  const _SeasonTile({
+    required this.season, required this.isArabic,
+    required this.episodesLabel, required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF141414),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.06)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
+              child: season.posterPath.isNotEmpty
+                  ? Image.network(
+                      'https://image.tmdb.org/t/p/w200${season.posterPath}',
+                      width: 80, height: 110, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 80, height: 110, color: Colors.white10,
+                        child: const Icon(Icons.tv_rounded, color: Colors.white24),
+                      ),
+                    )
+                  : Container(
+                      width: 80, height: 110, color: Colors.white10,
+                      child: const Icon(Icons.tv_rounded, color: Colors.white24),
+                    ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: isArabic ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                  children: [
+                    Text(season.name,
+                      style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                      textAlign: isArabic ? TextAlign.right : TextAlign.left),
+                    const SizedBox(height: 6),
+                    Text('${season.episodeCount} $episodesLabel',
+                      style: const TextStyle(color: Color(0xFFE50914), fontSize: 12, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Icon(
+                isArabic ? Icons.arrow_back_ios_rounded : Icons.arrow_forward_ios_rounded,
+                color: Colors.white24, size: 16,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  EPISODES SCREEN
+// ═══════════════════════════════════════════════════════════
+class EpisodesScreen extends StatefulWidget {
+  final int tmdbId;
+  final int seasonNumber;
+  final String showTitle;
+  final String seasonName;
+  final bool isArabic;
+
+  const EpisodesScreen({
+    super.key, required this.tmdbId, required this.seasonNumber,
+    required this.showTitle, required this.seasonName, required this.isArabic,
+  });
+
+  @override
+  State<EpisodesScreen> createState() => _EpisodesScreenState();
+}
+
+class _EpisodesScreenState extends State<EpisodesScreen> {
+  static const Color _accent = Color(0xFFE50914);
+  static const Color _darkBg = Color(0xFF050505);
+
+  List<EpisodeInfo> _episodes = [];
+  bool _isLoading = true;
+  bool _hasError = false;
+
+  AppStrings get s => AppStrings(widget.isArabic);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEpisodes();
+  }
+
+  Future<void> _loadEpisodes() async {
+    try {
+      final lang = widget.isArabic ? 'ar' : 'en-US';
+      final res = await http.get(Uri.parse(
+        '${ApiConfig.apiBase}/tmdb/tv/${widget.tmdbId}/season/${widget.seasonNumber}?language=$lang',
+      ));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final episodesJson = (data['episodes'] as List?) ?? [];
+        final episodes = episodesJson.map((j) => EpisodeInfo.fromJson(j)).toList();
+        if (!mounted) return;
+        setState(() { _episodes = episodes; _isLoading = false; });
+      } else {
+        debugPrint('Episodes load failed: HTTP ${res.statusCode}');
+        if (!mounted) return;
+        setState(() { _isLoading = false; _hasError = true; });
+      }
+    } catch (e) {
+      debugPrint('Episodes load error: $e');
+      if (!mounted) return;
+      setState(() { _isLoading = false; _hasError = true; });
+    }
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: const Color(0xFF1A1A1A), behavior: SnackBarBehavior.floating),
+    );
+  }
+
+  bool _isResolvingLink = false;
+
+  Future<void> _openEpisode(EpisodeInfo episode) async {
+    if (_isResolvingLink) return; // avoid duplicate taps while a lookup is in flight
+    setState(() => _isResolvingLink = true);
+
+    try {
+      final result = await ApiConfig.lookupVoduUrl(widget.showTitle);
+      final urlString = result['url'] as String?;
+      final matched = result['matched'] == true;
+
+      if (urlString == null) {
+        _showMessage(s.watchLinkError);
+        return;
+      }
+
+      final url = Uri.parse(urlString);
+      final canOpen = await canLaunchUrl(url);
+      if (!canOpen) {
+        _showMessage(s.watchLinkError);
+        return;
+      }
+
+      launchUrl(url, mode: LaunchMode.externalApplication);
+
+      if (!matched) {
+        // Vodu didn't have an exact page for this title - the user landed
+        // on search results instead, so tell them exactly what to pick.
+        final hint = widget.isArabic
+            ? 'اختر ${widget.seasonName} • الحلقة ${episode.episodeNumber} من نتائج فودو'
+            : 'Pick ${widget.seasonName} • Episode ${episode.episodeNumber} from the Vodu results';
+        _showMessage(hint);
+      }
+    } catch (e) {
+      debugPrint('Vodu lookup error: $e');
+      _showMessage(s.watchLinkError);
+    } finally {
+      if (mounted) setState(() => _isResolvingLink = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _darkBg,
+      appBar: AppBar(
+        backgroundColor: _darkBg,
+        elevation: 0,
+        title: Text('${widget.showTitle} • ${widget.seasonName}',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: Stack(
+        children: [
+          _buildBody(),
+          if (_isResolvingLink)
+            Container(
+              color: Colors.black.withOpacity(0.6),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const CircularProgressIndicator(color: _accent, strokeWidth: 3),
+                    const SizedBox(height: 16),
+                    Text(
+                      widget.isArabic ? 'جاري تجهيز رابط المشاهدة...' : 'Preparing the watch link...',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    return _isLoading
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const CircularProgressIndicator(color: _accent, strokeWidth: 3),
+                  const SizedBox(height: 16),
+                  Text(s.loadingEpisodes, style: TextStyle(color: Colors.white.withOpacity(0.6))),
+                ],
+              ),
+            )
+          : _hasError || _episodes.isEmpty
+              ? Center(child: Text(s.episodesLoadError, style: const TextStyle(color: Colors.white54)))
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _episodes.length,
+                  itemBuilder: (context, index) {
+                    final episode = _episodes[index];
+                    return _EpisodeTile(
+                      episode: episode,
+                      isArabic: widget.isArabic,
+                      episodeLabel: s.episode,
+                      watchLabel: s.watchEpisode,
+                      noOverviewLabel: s.noOverview,
+                      onTap: () => _openEpisode(episode),
+                    );
+                  },
+                );
+  }
+}
+
+class _EpisodeTile extends StatelessWidget {
+  final EpisodeInfo episode;
+  final bool isArabic;
+  final String episodeLabel;
+  final String watchLabel;
+  final String noOverviewLabel;
+  final VoidCallback onTap;
+
+  const _EpisodeTile({
+    required this.episode, required this.isArabic,
+    required this.episodeLabel, required this.watchLabel,
+    required this.noOverviewLabel, required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final overview = episode.overview.trim().isNotEmpty ? episode.overview : noOverviewLabel;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF141414),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.06)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: episode.stillPath.isNotEmpty
+                    ? Image.network(
+                        'https://image.tmdb.org/t/p/w300${episode.stillPath}',
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: Colors.white10,
+                          child: const Icon(Icons.tv_rounded, color: Colors.white24, size: 32),
+                        ),
+                      )
+                    : Container(
+                        color: Colors.white10,
+                        child: const Icon(Icons.tv_rounded, color: Colors.white24, size: 32),
+                      ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: isArabic ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text('$episodeLabel ${episode.episodeNumber}: ${episode.name}',
+                          style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                          textAlign: isArabic ? TextAlign.right : TextAlign.left),
+                      ),
+                      if (episode.rating > 0) ...[
+                        const SizedBox(width: 8),
+                        Row(children: [
+                          Text(episode.rating.toStringAsFixed(1),
+                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                          const SizedBox(width: 3),
+                          const Icon(Icons.star_rounded, color: Colors.amber, size: 14),
+                        ]),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(overview, maxLines: 2, overflow: TextOverflow.ellipsis,
+                    textAlign: isArabic ? TextAlign.right : TextAlign.left,
+                    style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12, height: 1.4)),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      if (episode.airDate.isNotEmpty)
+                        Text(episode.airDate, style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11)),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.play_circle_fill_rounded, color: Color(0xFFE50914), size: 16),
+                          const SizedBox(width: 4),
+                          Text(watchLabel, style: const TextStyle(color: Color(0xFFE50914), fontSize: 12, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),

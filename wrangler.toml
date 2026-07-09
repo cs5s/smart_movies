@@ -1,0 +1,9 @@
+name = "smart-movies-proxy"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# KV namespace used to cache resolved Vodu links (title -> direct URL) so
+# the same show isn't scraped/looked-up on every single request.
+[[kv_namespaces]]
+binding = "VODU_CACHE"
+id = "60b41bb3d02d4bc494be002e0be0a662"
