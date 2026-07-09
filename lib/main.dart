@@ -860,47 +860,13 @@ CRITICAL RULES:
     if (_isResolvingWatchProviders) return;
     setState(() => _isResolvingWatchProviders = true);
     try {
-      final String vidsrcUrl = 'https://vidsrc.pro/embed/movie/${movie.tmdbId}';
-
-      if (!mounted) return;
-      showModalBottomSheet(
-        context: context,
-        backgroundColor: Colors.black,
-        isScrollControlled: true,
-        useSafeArea: true,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        builder: (context) => Container(
-          height: MediaQuery.of(context).size.height * 0.85,
-          padding: const EdgeInsets.only(top: 8),
-          child: Column(
-            children: [
-              Container(
-                width: 40, height: 4,
-                margin: const EdgeInsets.only(bottom: 8),
-                decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
-              ),
-              Expanded(
-                child: HtmlElementView(viewType: 'vidsrc-movie-${movie.tmdbId}'),
-              ),
-            ],
-          ),
-        ),
-      );
-
-      // ignore: undefined_prefixed_name
-      ui_web.platformViewRegistry.registerViewFactory(
-        'vidsrc-movie-${movie.tmdbId}',
-        (int viewId) {
-          return html.IFrameElement()
-            ..src = vidsrcUrl
-            ..style.border = 'none'
-            ..style.width = '100%'
-            ..style.height = '100%'
-            ..setAttribute('allowfullscreen', 'true'); // تشغيل حر بدون sandbox خانق للويب
-        },
-      );
+      final url = Uri.parse('https://vidsrc.pro/embed/movie/${movie.tmdbId}');
+      if (await canLaunchUrl(url)) {
+        // الفتح في علامة تبويب جديدة مستقلة ونظيفة
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        _showMessage(s.watchProvidersError);
+      }
     } catch (_) {
       _showMessage(s.watchProvidersError);
     } finally {
@@ -2023,58 +1989,17 @@ class _EpisodesScreenState extends State<EpisodesScreen> {
  Future<void> _openEpisode(EpisodeInfo episode) async {
     if (_isResolvingLink) return;
     setState(() => _isResolvingLink = true);
-
     try {
-      final String vidsrcUrl = 
-          'https://vidsrc.pro/embed/tv/${widget.tmdbId}/${widget.seasonNumber}/${episode.episodeNumber}';
-
-      if (!mounted) return;
-      showModalBottomSheet(
-        context: context,
-        backgroundColor: Colors.black,
-        isScrollControlled: true,
-        useSafeArea: true,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        builder: (context) => Container(
-          height: MediaQuery.of(context).size.height * 0.85,
-          padding: const EdgeInsets.only(top: 8),
-          child: Column(
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Expanded(
-                child: HtmlElementView(
-                  viewType: 'vidsrc-player-${widget.tmdbId}-${episode.episodeNumber}',
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-
-      // ignore: undefined_prefixed_name
-      ui_web.platformViewRegistry.registerViewFactory(
-        'vidsrc-player-${widget.tmdbId}-${episode.episodeNumber}',
-        (int viewId) {
-          return html.IFrameElement()
-            ..src = vidsrcUrl
-            ..style.border = 'none'
-            ..style.width = '100%'
-            ..style.height = '100%'
-            ..setAttribute('allowfullscreen', 'true'); // يضمن تفعيل المشغلات وفك التشفير عالمتصفح فوراً
-        },
-      );
+      final url = Uri.parse(
+          'https://vidsrc.pro/embed/tv/${widget.tmdbId}/${widget.seasonNumber}/${episode.episodeNumber}');
+          
+      if (await canLaunchUrl(url)) {
+        // الفتح في علامة تبويب جديدة مستقلة ونظيفة
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        _showMessage(s.watchLinkError);
+      }
     } catch (e) {
-      debugPrint('Error launching secure player: $e');
       _showMessage(s.watchLinkError);
     } finally {
       if (mounted) setState(() => _isResolvingLink = false);
