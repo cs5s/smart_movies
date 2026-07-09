@@ -2072,8 +2072,8 @@ class _EpisodesScreenState extends State<EpisodesScreen> {
         ),
       );
 
-      // ignore: undefined_prefixed_name
-      ui.platformViewRegistry.registerViewFactory(
+      // ignore: undefined_prefixed_name, avoid_dynamic_calls
+      (ui.platformViewRegistry as dynamic).registerViewFactory(
         'vidsrc-player-${widget.tmdbId}-${episode.episodeNumber}',
         (int viewId) {
           final element = html.IFrameElement()
