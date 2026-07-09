@@ -153,25 +153,27 @@ class AppScrollBehavior extends MaterialScrollBehavior {
 class ResponsiveShell extends StatelessWidget {
   final Widget child;
   final double maxWidth;
-  const ResponsiveShell({super.key, required this.child, this.maxWidth = 460});
+  const ResponsiveShell({super.key, required this.child, this.maxWidth = 480});
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    if (size.width <= maxWidth) return child;
-
-    // On desktop/iPad the browser window is usually much *taller* than a
-    // phone, not just wider. Capping width alone let the frame stretch to
-    // the full window height, which made posters (BoxFit.cover) crop in
-    // tight/zoomed. Instead we cap BOTH dimensions to a real phone aspect
-    // ratio (~9:19.5) and center a proper phone-shaped frame.
-    const aspectRatio = 9 / 19.5; // width / height
-    double frameHeight = size.height * 0.92;
-    double frameWidth = frameHeight * aspectRatio;
-    if (frameWidth > maxWidth) {
-      frameWidth = maxWidth;
-      frameHeight = frameWidth / aspectRatio;
-    }
+    final width = MediaQuery.of(context).size.width;
+    if (width <= maxWidth) return child;
+    return ColoredBox(
+      color: const Color(0xFF050505),
+      child: Center(
+        child: SizedBox(
+          width: maxWidth,
+          height: double.infinity, // يعود ليأخذ الطول الكامل فتبدو الأبعاد فخمة
+          child: Material(
+            color: const Color(0xFF050505),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+}
 
     return ColoredBox(
       color: const Color(0xFF050505),
@@ -1069,7 +1071,6 @@ CRITICAL RULES:
                 behavior: AppScrollBehavior(),
                 child: PageView.builder(
                 controller: _pageController,
-                dragStartBehavior: DragStartBehavior.down,
                 itemCount: _movies.length,
                 onPageChanged: (i) => setState(() => _currentCard = i),
                 itemBuilder: (context, index) => _MovieCardWidget(
@@ -1128,7 +1129,6 @@ CRITICAL RULES:
           behavior: AppScrollBehavior(),
           child: PageView.builder(
             controller: _posterPageController,
-            dragStartBehavior: DragStartBehavior.down,
             itemCount: _homePosterUrls.length,
             onPageChanged: (i) { setState(() => _currentPoster = i); _startPosterTimer(); },
             itemBuilder: (context, index) => Image.network(
@@ -2084,7 +2084,9 @@ class _EpisodesScreenState extends State<EpisodesScreen> {
             ..style.width = '100%'
             ..style.height = '100%';
             
-          element.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-presentation');
+          // إضافة التراخيص الأساسية المحدثة لتشغيل الفيديو بدون كسر السيرفر
+          element.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-presentation allow-modals');
+          element.setAttribute('allowfullscreen', 'true'); // للسماح بتكبير الشاشة
           return element;
         },
       );
