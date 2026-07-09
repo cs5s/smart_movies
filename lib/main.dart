@@ -174,25 +174,6 @@ class ResponsiveShell extends StatelessWidget {
   }
 }
 
-    return ColoredBox(
-      color: const Color(0xFF050505),
-      child: Center(
-        child: SizedBox(
-          width: frameWidth,
-          height: frameHeight,
-          child: Material(
-            color: const Color(0xFF050505),
-            clipBehavior: Clip.antiAlias,
-            borderRadius: BorderRadius.circular(28),
-            elevation: 16,
-            child: child,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 // ═══════════════════════════════════════════════════════════
 //  SPLASH SCREEN
 // ═══════════════════════════════════════════════════════════
