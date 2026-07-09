@@ -50,7 +50,6 @@ async function handleResolve(url) {
   const type = url.searchParams.get("type");
   const season = url.searchParams.get("season");
   const ep = url.searchParams.get("ep");
-
   const targetUrl = type === 'movie' 
     ? `https://vidsrc.pro/embed/movie/${id}`
     : `https://vidsrc.pro/embed/tv/${id}/${season}/${ep}`;
@@ -59,7 +58,6 @@ async function handleResolve(url) {
     const res = await fetch(targetUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
     const html = await res.text();
     const match = html.match(/src=["'](https:\/\/vidsrc\.[^"']+)["']/i);
-    
     if (match) return jsonResponse({ source: match[1] });
     return jsonResponse({ error: "Source not found" }, 404);
   } catch (e) {
@@ -83,7 +81,6 @@ export default {
         });
         return new Response(await upstream.text(), { status: upstream.status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
       }
-
       if (url.pathname.startsWith("/tmdb/") && request.method === "GET") {
         const tmdbPath = url.pathname.replace("/tmdb", "");
         const tmdbUrl = new URL(`https://api.themoviedb.org/3${tmdbPath}`);
@@ -92,7 +89,6 @@ export default {
         const upstream = await fetch(tmdbUrl.toString());
         return new Response(await upstream.text(), { status: upstream.status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
       }
-
       if (url.pathname === "/vodu-lookup" && request.method === "GET") return await handleVoduLookup(url, env);
       return jsonResponse({ error: "Not found" }, 404);
     } catch (err) {
