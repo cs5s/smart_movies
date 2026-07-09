@@ -359,21 +359,6 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-// دالة موحدة لفتح روابط البث بشكل آمن في المتصفح الخارجي
-  Future<void> _launchSecurePlayer(String urlString) async {
-    final Uri url = Uri.parse(urlString);
-    try {
-      if (await canLaunchUrl(url)) {
-        // الفتح في المتصفح الافتراضي (Chrome/Safari) سيسمح لمتصفحك بحظر الإعلانات 
-        // ويضمن تشغيل الفيديو بدون مشاكل الـ IFrame
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      } else {
-        _showMessage(s.watchLinkError);
-      }
-    } catch (e) {
-      _showMessage(s.watchLinkError);
-    }
-  }
 
 class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
@@ -1049,7 +1034,7 @@ CRITICAL RULES:
                           )
                       : null,
                   watchLabel: s.whereToWatch,
-                  onWatchTap: _movies[index].mediaType == 'movie' ? () => PlayerEngine.instance.openMovie(context, _movies[index].tmdbId) : null,
+                  onWatchTap: () => PlayerEngine.instance.openMovie(context, movie.tmdbId),
                 ),
               ),
               ),

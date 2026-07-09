@@ -5,21 +5,21 @@ class PlayerEngine {
   static final PlayerEngine instance = PlayerEngine._internal();
   PlayerEngine._internal();
 
-  // هذه الدالة الموحدة للأفلام
   Future<void> openMovie(BuildContext context, int tmdbId) async {
     final url = Uri.parse('https://vidsrc.pro/embed/movie/$tmdbId');
-    await _launch(url);
+    await _launch(url, context);
   }
 
-  // هذه الدالة الموحدة للمسلسلات
   Future<void> openEpisode(BuildContext context, int tmdbId, int season, int episode) async {
     final url = Uri.parse('https://vidsrc.pro/embed/tv/$tmdbId/$season/$episode');
-    await _launch(url);
+    await _launch(url, context);
   }
 
-  Future<void> _launch(Uri url) async {
+  Future<void> _launch(Uri url, BuildContext context) async {
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر فتح الرابط')));
     }
   }
 }
