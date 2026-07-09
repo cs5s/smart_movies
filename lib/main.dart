@@ -1,13 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:html' as html; // 1. أضف هذا السطر
-import 'dart:ui' as ui;     // 2. أضف هذا السطر
+import 'dart:html' as html;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:ui_web' as ui_web; // هذا هو البديل الرسمي الحديث للويب
 // ═══════════════════════════════════════════════════════════
 //  API CONFIG
 // ═══════════════════════════════════════════════════════════
@@ -2072,8 +2074,8 @@ class _EpisodesScreenState extends State<EpisodesScreen> {
         ),
       );
 
-      // ignore: undefined_prefixed_name, avoid_dynamic_calls
-      (ui.platformViewRegistry as dynamic).registerViewFactory(
+      // ignore: undefined_prefixed_name
+      ui_web.platformViewRegistry.registerViewFactory(
         'vidsrc-player-${widget.tmdbId}-${episode.episodeNumber}',
         (int viewId) {
           final element = html.IFrameElement()
