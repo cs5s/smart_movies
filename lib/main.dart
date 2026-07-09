@@ -1,12 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:html' as html; // 1. أضف هذا السطر
+import 'dart:ui' as ui;     // 2. أضف هذا السطر
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-
 // ═══════════════════════════════════════════════════════════
 //  API CONFIG
 // ═══════════════════════════════════════════════════════════
@@ -101,7 +102,7 @@ class AppStrings {
   String get noOverview         => isArabic ? 'لا يتوفر وصف لهذه الحلقة' : 'No description available';
 
   // Where to watch (legal providers via TMDB/JustWatch)
-  String get whereToWatch        => isArabic ? 'أين يمكن المشاهدة'      : 'Where to Watch';
+  String get whereToWatch        => isArabic ? 'مشاهدة الفلم'           : 'Watch Movie';
   String get noWatchProviders     => isArabic ? 'لا تتوفر معلومات مشاهدة لهذا العمل في منطقتك'
                                         : 'No watch info available for this title in your region';
   String get watchProvidersError => isArabic ? 'تعذر تحميل معلومات المشاهدة' : 'Could not load watch info';
@@ -150,19 +151,37 @@ class AppScrollBehavior extends MaterialScrollBehavior {
 class ResponsiveShell extends StatelessWidget {
   final Widget child;
   final double maxWidth;
-  const ResponsiveShell({super.key, required this.child, this.maxWidth = 480});
+  const ResponsiveShell({super.key, required this.child, this.maxWidth = 460});
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    if (width <= maxWidth) return child;
+    final size = MediaQuery.of(context).size;
+    if (size.width <= maxWidth) return child;
+
+    // On desktop/iPad the browser window is usually much *taller* than a
+    // phone, not just wider. Capping width alone let the frame stretch to
+    // the full window height, which made posters (BoxFit.cover) crop in
+    // tight/zoomed. Instead we cap BOTH dimensions to a real phone aspect
+    // ratio (~9:19.5) and center a proper phone-shaped frame.
+    const aspectRatio = 9 / 19.5; // width / height
+    double frameHeight = size.height * 0.92;
+    double frameWidth = frameHeight * aspectRatio;
+    if (frameWidth > maxWidth) {
+      frameWidth = maxWidth;
+      frameHeight = frameWidth / aspectRatio;
+    }
+
     return ColoredBox(
       color: const Color(0xFF050505),
       child: Center(
         child: SizedBox(
-          width: maxWidth,
+          width: frameWidth,
+          height: frameHeight,
           child: Material(
             color: const Color(0xFF050505),
+            clipBehavior: Clip.antiAlias,
+            borderRadius: BorderRadius.circular(28),
+            elevation: 16,
             child: child,
           ),
         ),
@@ -1044,8 +1063,11 @@ CRITICAL RULES:
           child: Stack(
             alignment: Alignment.center,
             children: [
-              PageView.builder(
+              ScrollConfiguration(
+                behavior: AppScrollBehavior(),
+                child: PageView.builder(
                 controller: _pageController,
+                dragStartBehavior: DragStartBehavior.down,
                 itemCount: _movies.length,
                 onPageChanged: (i) => setState(() => _currentCard = i),
                 itemBuilder: (context, index) => _MovieCardWidget(
@@ -1076,6 +1098,7 @@ CRITICAL RULES:
                       : null,
                 ),
               ),
+              ),
               if (_currentCard < _movies.length - 1)
                 Positioned(right: 4, child: _NavArrow(icon: Icons.chevron_right_rounded, onTap: _nextCard)),
               if (_currentCard > 0)
@@ -1099,13 +1122,17 @@ CRITICAL RULES:
     return Stack(
       fit: StackFit.expand,
       children: [
-        PageView.builder(
-          controller: _posterPageController,
-          itemCount: _homePosterUrls.length,
-          onPageChanged: (i) { setState(() => _currentPoster = i); _startPosterTimer(); },
-          itemBuilder: (context, index) => Image.network(
-            _homePosterUrls[index], fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(color: const Color(0xFF1A1A1A)),
+        ScrollConfiguration(
+          behavior: AppScrollBehavior(),
+          child: PageView.builder(
+            controller: _posterPageController,
+            dragStartBehavior: DragStartBehavior.down,
+            itemCount: _homePosterUrls.length,
+            onPageChanged: (i) { setState(() => _currentPoster = i); _startPosterTimer(); },
+            itemBuilder: (context, index) => Image.network(
+              _homePosterUrls[index], fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(color: const Color(0xFF1A1A1A)),
+            ),
           ),
         ),
         Container(
@@ -2001,41 +2028,82 @@ class _EpisodesScreenState extends State<EpisodesScreen> {
     );
   }
 
+
   bool _isResolvingLink = false;
 
   Future<void> _openEpisode(EpisodeInfo episode) async {
-    if (_isResolvingLink) return; // avoid duplicate taps while a lookup is in flight
+    if (_isResolvingLink) return; // تفادي النقرات المزدوجة أثناء التحميل
     setState(() => _isResolvingLink = true);
 
     try {
-      final result = await ApiConfig.lookupVoduUrl(widget.showTitle);
-      final urlString = result['url'] as String?;
-      final matched = result['matched'] == true;
+      // 1. توليد رابط البث العالمي المترجم مباشرة باستخدام الـ TMDB ID
+      // هذا السيرفر مستقر جداً ويدعم الترجمة العربية التلقائية
+      final String vidsrcUrl = 
+          'https://vidsrc.pro/embed/tv/${widget.tmdbId}/${widget.seasonNumber}/${episode.episodeNumber}';
 
-      if (urlString == null) {
-        _showMessage(s.watchLinkError);
-        return;
-      }
+      // 2. صناعة شاشة بث منبثقة داخل التطبيق (Modal Bottom Sheet) كمشغل فيديو ذكي
+      if (!mounted) return;
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.black,
+        isScrollControlled: true,
+        useSafeArea: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        builder: (context) => Container(
+          height: MediaQuery.of(context).size.height * 0.85,
+          padding: const EdgeInsets.only(top: 8),
+          child: Column(
+            children: [
+              // مقبض سحب علوي للشاشة المنبثقة
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // المشغل الفعلي للحلقة بداخل واجهة الويب المحمية
+              Expanded(
+                child: HtmlElementView(
+                  viewType: 'vidsrc-player-${widget.tmdbId}-${episode.episodeNumber}',
+                  // نقوم بتسجيل العنصر برمجياً لحظر فتح النوافذ الإعلانية المنبثقة (Pop-ups)
+                  onPlatformViewCreated: (_) {
+                    // السيستم يمنع الـ scripts الخارجية من فتح نوافذ جديدة بالمتصفح
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
 
-      final url = Uri.parse(urlString);
-      final canOpen = await canLaunchUrl(url);
-      if (!canOpen) {
-        _showMessage(s.watchLinkError);
-        return;
-      }
+      // تسجيل الـ iframe برمجياً لنسخة الويب لتعمل كـ Sandbox محمي وخانق للإعلانات
+      // ignore: undefined_prefixed_name
+      ui.platformViewRegistry.registerViewFactory(
+        'vidsrc-player-${widget.tmdbId}-${episode.episodeNumber}',
+        (int viewId) {
+          final element = html.IFrameElement()
+            ..src = vidsrcUrl
+            ..style.border = 'none'
+            ..style.width = '100%'
+            ..style.height = '100%'
+            // تفعيل ميزة الـ Sandbox لمنع فتح الإعلانات والـ Pop-ups نهائياً خارج الحلقة
+            ..sandbox!.addAll([
+              'allow-scripts',
+              'allow-same-origin',
+              'allow-forms',
+              'allow-presentation'
+            ]);
+          return element;
+        },
+      );
 
-      launchUrl(url, mode: LaunchMode.externalApplication);
-
-      if (!matched) {
-        // Vodu didn't have an exact page for this title - the user landed
-        // on search results instead, so tell them exactly what to pick.
-        final hint = widget.isArabic
-            ? 'اختر ${widget.seasonName} • الحلقة ${episode.episodeNumber} من نتائج فودو'
-            : 'Pick ${widget.seasonName} • Episode ${episode.episodeNumber} from the Vodu results';
-        _showMessage(hint);
-      }
     } catch (e) {
-      debugPrint('Vodu lookup error: $e');
+      debugPrint('Error launching secure player: $e');
       _showMessage(s.watchLinkError);
     } finally {
       if (mounted) setState(() => _isResolvingLink = false);
