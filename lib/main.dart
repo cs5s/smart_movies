@@ -18,19 +18,6 @@ class ApiConfig {
     final override = dotenv.env['API_BASE_URL'];
     return (override != null && override.isNotEmpty) ? override : defaultApiBase;
   }
-
-  // VODU integration — returns a map that should contain a playable "url" field.
-  static Future<Map<String, dynamic>> lookupVoduUrl(String showTitle, {int? season, int? episode}) async {
-    String url = '$apiBase/vodu-lookup?title=${Uri.encodeComponent(showTitle)}';
-    if (season != null && episode != null) {
-      url += '&season=$season&episode=$episode';
-    }
-    final res = await http.get(Uri.parse(url));
-    if (res.statusCode != 200) {
-      throw Exception('Vodu lookup failed: HTTP ${res.statusCode}');
-    }
-    return jsonDecode(res.body) as Map<String, dynamic>;
-  }
 }
 
 Future<void> main() async {
@@ -147,10 +134,6 @@ class AppScrollBehavior extends MaterialScrollBehavior {
 
 // ═══════════════════════════════════════════════════════════
 //  RESPONSIVE SHELL
-//  Keeps a polished "phone frame" look for the main browsing
-//  screens on large monitors (so posters never look stretched
-//  or squished), while wide=true screens (like the player) can
-//  opt out and use the full width instead.
 // ═══════════════════════════════════════════════════════════
 class ResponsiveShell extends StatelessWidget {
   final Widget child;
@@ -855,7 +838,7 @@ CRITICAL RULES:
     if (_pageController.hasClients) _pageController.jumpToPage(0);
   }
 
-  void _openWatchScreen(MovieCard movie) {
+ void _openWatchScreen(MovieCard movie) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -864,6 +847,7 @@ CRITICAL RULES:
           posterUrl: movie.imageUrl,
           isArabic: _isArabic,
           showTitleForLookup: movie.titleEn.isNotEmpty ? movie.titleEn : movie.titleAr,
+          tmdbId: movie.tmdbId,
         ),
       ),
     );
@@ -943,8 +927,6 @@ CRITICAL RULES:
     );
   }
 
-  // Horizontal quick-access row of genres shown on the home screen,
-  // so categories are always visible without opening the drawer.
   Widget _buildQuickGenres() {
     final genres = _isArabic ? _quickGenresAr : _quickGenresEn;
     return Column(
@@ -1766,6 +1748,7 @@ class WatchScreen extends StatefulWidget {
   final String posterUrl;
   final bool isArabic;
   final String showTitleForLookup;
+  final int tmdbId;
   final int? season;
   final int? episode;
 
@@ -1775,6 +1758,7 @@ class WatchScreen extends StatefulWidget {
     required this.posterUrl,
     required this.isArabic,
     required this.showTitleForLookup,
+    required this.tmdbId,
     this.season,
     this.episode,
   });
@@ -1791,8 +1775,6 @@ class _WatchScreenState extends State<WatchScreen> {
   bool _isLoading = true;
   bool _loadFailed = false;
 
-  // Server 1 is wired to the real VODU lookup. Servers 2-4 are placeholders
-  // ready to be filled with real URLs later — just set their value below.
   final Map<int, String?> _serverUrls = {1: null, 2: null, 3: null, 4: null};
 
   AppStrings get s => AppStrings(widget.isArabic);
@@ -1803,20 +1785,29 @@ class _WatchScreenState extends State<WatchScreen> {
     _loadServer1();
   }
 
-  Future<void> _loadServer1() async {
+ Future<void> _loadServer1() async {
     setState(() { _isLoading = true; _loadFailed = false; });
     try {
-      final data = await ApiConfig.lookupVoduUrl(
-        widget.showTitleForLookup,
-        season: widget.season,
-        episode: widget.episode,
-      );
-      final url = (data['url'] ?? data['embedUrl'] ?? data['link'] ?? '').toString();
+      final id = widget.tmdbId;
+      final isMovie = widget.season == null || widget.episode == null;
+
+      if (isMovie) {
+        _serverUrls[1] = 'https://vidsrc.to/embed/movie/$id';
+        _serverUrls[2] = 'https://vidlink.pro/embed/movie/$id?primaryColor=E50914';
+        _serverUrls[3] = 'https://vidsrc.xyz/embed/movie/$id';
+        _serverUrls[4] = 'https://player.autoembed.cc/embed/movie/$id';
+      } else {
+        final s = widget.season;
+        final e = widget.episode;
+        _serverUrls[1] = 'https://vidsrc.to/embed/tv/$id/$s/$e';
+        _serverUrls[2] = 'https://vidlink.pro/embed/tv/$id/$s/$e?primaryColor=E50914';
+        _serverUrls[3] = 'https://vidsrc.xyz/embed/tv/$id/$s/$e';
+        _serverUrls[4] = 'https://player.autoembed.cc/embed/tv/$id/$s/$e';
+      }
+
       if (!mounted) return;
       setState(() {
-        _serverUrls[1] = url.isNotEmpty ? url : null;
         _isLoading = false;
-        _loadFailed = url.isEmpty;
       });
     } catch (_) {
       if (!mounted) return;
@@ -2327,6 +2318,7 @@ class _EpisodesScreenState extends State<EpisodesScreen> {
           posterUrl: '',
           isArabic: widget.isArabic,
           showTitleForLookup: widget.showTitleEn.isNotEmpty ? widget.showTitleEn : widget.showTitle,
+          tmdbId: widget.tmdbId,
           season: widget.seasonNumber,
           episode: episode.episodeNumber,
         ),
@@ -2981,6 +2973,7 @@ class _DetailScreenState extends State<DetailScreen> {
           posterUrl: _movie!.imageUrl,
           isArabic: widget.isArabic,
           showTitleForLookup: _movie!.titleEn.isNotEmpty ? _movie!.titleEn : _movie!.titleAr,
+          tmdbId: _movie!.tmdbId,
         ),
       ),
     );
