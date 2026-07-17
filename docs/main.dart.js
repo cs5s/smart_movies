@@ -89340,14 +89340,14 @@ j=k.w
 n=j==null||k.x==null
 i=p.r
 if(n){i.m(0,1,"https://vidsrc.to/embed/movie/"+A.k(o))
-i.m(0,2,"https://vidlink.pro/embed/movie/"+A.k(o))
-i.m(0,3,"https://vidsrc.xyz/embed/movie/"+A.k(o))
-i.m(0,4,"https://player.autoembed.cc/embed/movie/"+A.k(o))}else{m=j
+i.m(0,2,"https://vidlink.pro/embed/movie/"+A.k(o)+"?primaryColor=E50914")
+i.m(0,3,"https://vidsrc.xyz/embed/movie?tmdb="+A.k(o))
+i.m(0,4,"https://autoembed.to/movie/tmdb/"+A.k(o))}else{m=j
 l=k.x
 i.m(0,1,"https://vidsrc.to/embed/tv/"+A.k(o)+"/"+A.k(m)+"/"+A.k(l))
-i.m(0,2,"https://vidlink.pro/embed/tv/"+A.k(o)+"/"+A.k(m)+"/"+A.k(l))
-i.m(0,3,"https://vidsrc.xyz/embed/tv/"+A.k(o)+"/"+A.k(m)+"/"+A.k(l))
-i.m(0,4,"https://player.autoembed.cc/embed/tv/"+A.k(o)+"/"+A.k(m)+"/"+A.k(l))}if(p.c==null){s=1
+i.m(0,2,"https://vidlink.pro/embed/tv/"+A.k(o)+"/"+A.k(m)+"/"+A.k(l)+"?primaryColor=E50914")
+i.m(0,3,"https://vidsrc.xyz/embed/tv?tmdb="+A.k(o)+"&season="+A.k(m)+"&episode="+A.k(l))
+i.m(0,4,"https://autoembed.to/tv/tmdb/"+A.k(o)+"-"+A.k(m)+"-"+A.k(l))}if(p.c==null){s=1
 break}p.Z(new A.auy(p))}catch(g){if(p.c==null){s=1
 break}p.Z(new A.auz(p))}case 1:return A.J(q,r)}})
 return A.K($async$xs,r)},

@@ -1790,17 +1790,19 @@ class _WatchScreenState extends State<WatchScreen> {
       final isMovie = widget.season == null || widget.episode == null;
 
       if (isMovie) {
+        // 🎬 روابط الأفلام المصححة لكل سيرفر لتجنب خطأ 404
         _serverUrls[1] = 'https://vidsrc.to/embed/movie/$id';
-        _serverUrls[2] = 'https://vidlink.pro/embed/movie/$id';
-        _serverUrls[3] = 'https://vidsrc.xyz/embed/movie/$id';
-        _serverUrls[4] = 'https://player.autoembed.cc/embed/movie/$id';
+        _serverUrls[2] = 'https://vidlink.pro/embed/movie/$id?primaryColor=E50914';
+        _serverUrls[3] = 'https://vidsrc.xyz/embed/movie?tmdb=$id'; // XYZ يطلب tmdb=
+        _serverUrls[4] = 'https://autoembed.to/movie/tmdb/$id';    // AutoEmbed له مسار مختلف تماماً
       } else {
+        // 📺 روابط المسلسلات المصححة (الموسم والحلقة) بدقة
         final s = widget.season;
         final e = widget.episode;
         _serverUrls[1] = 'https://vidsrc.to/embed/tv/$id/$s/$e';
-        _serverUrls[2] = 'https://vidlink.pro/embed/tv/$id/$s/$e';
-        _serverUrls[3] = 'https://vidsrc.xyz/embed/tv/$id/$s/$e';
-        _serverUrls[4] = 'https://player.autoembed.cc/embed/tv/$id/$s/$e';
+        _serverUrls[2] = 'https://vidlink.pro/embed/tv/$id/$s/$e?primaryColor=E50914';
+        _serverUrls[3] = 'https://vidsrc.xyz/embed/tv?tmdb=$id&season=$s&episode=$e'; // XYZ يطلب بارامترز منفصلة
+        _serverUrls[4] = 'https://autoembed.to/tv/tmdb/$id-$s-$e';                     // مسار مدمج بـ شرطة لـ AutoEmbed
       }
 
       if (!mounted) return;
@@ -1831,7 +1833,7 @@ class _WatchScreenState extends State<WatchScreen> {
     }
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
-      child: _NeroInlinePlayer(key: ValueKey(url), url: url), // ← الحل هنا
+      child: _NeroInlinePlayer(key: ValueKey(url), url: url),
     );
   }
 
