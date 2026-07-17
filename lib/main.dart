@@ -24,9 +24,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     await dotenv.load(fileName: "assets/env");
-  } catch (_) {
-    // No .env file present
-  }
+  } catch (_) {}
   runApp(const SmartMoviesApp());
 }
 
@@ -100,6 +98,8 @@ class AppStrings {
   String get serverUnavailable => isArabic ? 'هذا السيرفر غير متوفر حالياً، جرّب سيرفر آخر'
                                             : 'This server is not available yet, try another one';
   String get loadingServer      => isArabic ? 'جاري تجهيز السيرفر...'    : 'Preparing the server...';
+  String get openExternal       => isArabic ? 'فتح في المتصفح'          : 'Open in Browser';
+  String get serverTimeout      => isArabic ? 'تعذر تحميل السيرفر'      : 'Server timed out';
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1772,6 +1772,7 @@ class _WatchScreenState extends State<WatchScreen> {
   int _activeServer = 1;
   bool _isLoading = true;
   bool _loadFailed = false;
+  Timer? _timeoutTimer;
 
   final Map<int, String?> _serverUrls = {1: null, 2: null, 3: null, 4: null};
 
@@ -1783,31 +1784,43 @@ class _WatchScreenState extends State<WatchScreen> {
     _loadServers();
   }
 
+  @override
+  void dispose() {
+    _timeoutTimer?.cancel();
+    super.dispose();
+  }
+
   Future<void> _loadServers() async {
     setState(() { _isLoading = true; _loadFailed = false; });
+    _timeoutTimer?.cancel();
+
     try {
       final id = widget.tmdbId;
       final isMovie = widget.season == null || widget.episode == null;
 
+      // روابط السيرفرات الأربعة (تم تصحيحها لتجنب 404)
       if (isMovie) {
-        // 🎬 روابط الأفلام المصححة لكل سيرفر لتجنب خطأ 404
         _serverUrls[1] = 'https://vidsrc.to/embed/movie/$id';
         _serverUrls[2] = 'https://vidlink.pro/embed/movie/$id?primaryColor=E50914';
-        _serverUrls[3] = 'https://vidsrc.xyz/embed/movie?tmdb=$id'; // XYZ يطلب tmdb=
-        _serverUrls[4] = 'https://autoembed.to/movie/tmdb/$id';    // AutoEmbed له مسار مختلف تماماً
+        _serverUrls[3] = 'https://vidsrc.xyz/embed/movie?tmdb=$id';
+        _serverUrls[4] = 'https://autoembed.to/movie/tmdb/$id';
       } else {
-        // 📺 روابط المسلسلات المصححة (الموسم والحلقة) بدقة
         final s = widget.season;
         final e = widget.episode;
         _serverUrls[1] = 'https://vidsrc.to/embed/tv/$id/$s/$e';
         _serverUrls[2] = 'https://vidlink.pro/embed/tv/$id/$s/$e?primaryColor=E50914';
-        _serverUrls[3] = 'https://vidsrc.xyz/embed/tv?tmdb=$id&season=$s&episode=$e'; // XYZ يطلب بارامترز منفصلة
-        _serverUrls[4] = 'https://autoembed.to/tv/tmdb/$id-$s-$e';                     // مسار مدمج بـ شرطة لـ AutoEmbed
+        _serverUrls[3] = 'https://vidsrc.xyz/embed/tv?tmdb=$id&season=$s&episode=$e';
+        _serverUrls[4] = 'https://autoembed.to/tv/tmdb/$id-$s-$e';
       }
 
       if (!mounted) return;
-      setState(() {
-        _isLoading = false;
+      setState(() { _isLoading = false; });
+
+      // بدء مؤقت احتياطي: إذا لم يتحمل الـ iframe بعد 8 ثوانٍ، أظهر زر الفتح الخارجي تلقائياً
+      _timeoutTimer = Timer(const Duration(seconds: 8), () {
+        if (mounted && !_loadFailed) {
+          setState(() => _loadFailed = true);
+        }
       });
     } catch (_) {
       if (!mounted) return;
@@ -1815,15 +1828,33 @@ class _WatchScreenState extends State<WatchScreen> {
     }
   }
 
-  void _selectServer(int n) => setState(() => _activeServer = n);
+  void _selectServer(int n) {
+    if (n == _activeServer) return;
+    setState(() {
+      _activeServer = n;
+      _loadFailed = false; // إعادة تعيين حالة الفشل عند تغيير السيرفر
+    });
+    _timeoutTimer?.cancel();
+    _timeoutTimer = Timer(const Duration(seconds: 8), () {
+      if (mounted) setState(() => _loadFailed = true);
+    });
+  }
+
+  void _openExternal() {
+    final url = _serverUrls[_activeServer];
+    if (url != null && url.isNotEmpty) {
+      launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    }
+  }
 
   Widget _buildPlayerArea() {
-    if (_activeServer == 1 && _isLoading) {
+    if (_isLoading) {
       return _statusBox(
         const CircularProgressIndicator(color: _accent, strokeWidth: 3),
         s.loadingServer,
       );
     }
+
     final url = _serverUrls[_activeServer];
     if (url == null || url.isEmpty) {
       return _statusBox(
@@ -1831,9 +1862,44 @@ class _WatchScreenState extends State<WatchScreen> {
         s.serverUnavailable,
       );
     }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: _NeroInlinePlayer(key: ValueKey(url), url: url),
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // مشغل iframe الأساسي
+        ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: _NeroInlinePlayer(key: ValueKey(url), url: url),
+        ),
+        // طبقة احتياطية تظهر فقط عند انتهاء المهلة (8 ثوانٍ) بدون تحميل
+        if (_loadFailed)
+          GestureDetector(
+            onTap: _openExternal, // الضغط على أي مكان يفتح الفيديو خارجياً
+            child: Container(
+              color: Colors.black.withOpacity(0.85),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.play_circle_outline, color: Colors.white54, size: 64),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: _openExternal,
+                      icon: const Icon(Icons.open_in_browser, color: Colors.white),
+                      label: Text(s.openExternal, style: const TextStyle(color: Colors.white)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _accent,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(s.serverTimeout, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -1854,16 +1920,6 @@ class _WatchScreenState extends State<WatchScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Text(text, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white54, fontSize: 13)),
             ),
-            if (_activeServer == 1 && _loadFailed) ...[
-              const SizedBox(height: 14),
-              OutlinedButton.icon(
-                onPressed: _loadServers,
-                icon: const Icon(Icons.refresh_rounded, size: 16, color: Colors.white70),
-                label: Text(widget.isArabic ? 'إعادة المحاولة' : 'Retry',
-                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                style: OutlinedButton.styleFrom(side: BorderSide(color: Colors.white.withOpacity(0.2))),
-              ),
-            ],
           ],
         ),
       ),
@@ -1896,10 +1952,12 @@ class _WatchScreenState extends State<WatchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // لا نستخدم ResponsiveShell هنا لضمان ظهور الفيديو كاملاً على الهاتف
     return Scaffold(
       backgroundColor: _darkBg,
       appBar: AppBar(
-        backgroundColor: _darkBg, elevation: 0,
+        backgroundColor: _darkBg,
+        elevation: 0,
         title: Text(widget.title,
           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
           overflow: TextOverflow.ellipsis),
@@ -1907,8 +1965,7 @@ class _WatchScreenState extends State<WatchScreen> {
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final isWide = constraints.maxWidth > 900;
-
+          final isWide = constraints.maxWidth > 600;
           final serverRow = SizedBox(
             height: 46,
             child: ListView(
@@ -1916,7 +1973,6 @@ class _WatchScreenState extends State<WatchScreen> {
               children: [1, 2, 3, 4].map(_serverChip).toList(),
             ),
           );
-
           final header = Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Row(children: [
@@ -1949,15 +2005,18 @@ class _WatchScreenState extends State<WatchScreen> {
             );
           }
 
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              playerBlock,
-              const SizedBox(height: 20),
-              header,
-              const SizedBox(height: 12),
-              serverRow,
-            ],
+          // تصميم الهاتف: عمودي بسيط بدون أعمدة جانبية
+          return Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                playerBlock,
+                const SizedBox(height: 16),
+                header,
+                const SizedBox(height: 8),
+                serverRow,
+              ],
+            ),
           );
         },
       ),
@@ -1965,7 +2024,9 @@ class _WatchScreenState extends State<WatchScreen> {
   }
 }
 
-// Embeds a playable URL as an <iframe> inside the Flutter Web canvas.
+// ═══════════════════════════════════════════════════════════
+//  INLINE PLAYER WITH EXTERNAL FALLBACK SUPPORT
+// ═══════════════════════════════════════════════════════════
 class _NeroInlinePlayer extends StatefulWidget {
   final String url;
   const _NeroInlinePlayer({super.key, required this.url});
@@ -1976,6 +2037,7 @@ class _NeroInlinePlayer extends StatefulWidget {
 
 class _NeroInlinePlayerState extends State<_NeroInlinePlayer> {
   late final String _viewId;
+  bool _hasError = false;
 
   @override
   void initState() {
@@ -1989,6 +2051,12 @@ class _NeroInlinePlayerState extends State<_NeroInlinePlayer> {
         ..style.height = '100%'
         ..allowFullscreen = true
         ..allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+
+      // استماع لحدث الخطأ داخل iframe (إن دعمه المتصفح)
+      iframe.onError.listen((_) {
+        if (mounted) setState(() => _hasError = true);
+      });
+
       return iframe;
     });
   }
@@ -1997,7 +2065,9 @@ class _NeroInlinePlayerState extends State<_NeroInlinePlayer> {
   Widget build(BuildContext context) {
     return ColoredBox(
       color: Colors.black,
-      child: HtmlElementView(viewType: _viewId),
+      child: _hasError
+          ? const Center(child: Icon(Icons.error_outline, color: Colors.white38, size: 40))
+          : HtmlElementView(viewType: _viewId),
     );
   }
 }
