@@ -1,20 +1,17 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:html' as html;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'core/player/player_engine.dart'; // أضف هذا السطر مع باقي الـ imports
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:ui_web' as ui_web; // هذا هو البديل الرسمي الحديث للويب
+import 'core/player/player_engine.dart'; 
+
 // ═══════════════════════════════════════════════════════════
 //  API CONFIG
 // ═══════════════════════════════════════════════════════════
 class ApiConfig {
-  // The Cloudflare Worker proxy that holds the real Groq/TMDB keys.
   static const String defaultApiBase = 'https://smart-movies-proxy.fm76400076.workers.dev';
   static String get apiBase {
     final override = dotenv.env['API_BASE_URL'];
@@ -24,16 +21,13 @@ class ApiConfig {
   // ─────────────────────────────────────────────────────────
   // VODU integration
   // ─────────────────────────────────────────────────────────
-  // Vodu doesn't expose a public API mapping TMDB IDs to its own internal
-  // post IDs, so resolving a show's Vodu page happens server-side in the
-  // Worker (see worker.js -> /vodu-lookup). The Worker looks up the show
-  // by title, extracts the direct link, and caches it (via KV) so the
-  // same title isn't looked up again on future requests - no manual ID
-  // list to maintain here.
-  static Future<Map<String, dynamic>> lookupVoduUrl(String showTitle) async {
-    final res = await http.get(Uri.parse(
-      '$apiBase/vodu-lookup?title=${Uri.encodeComponent(showTitle)}',
-    ));
+  static Future<Map<String, dynamic>> lookupVoduUrl(String showTitle, {int? season, int? episode}) async {
+    String url = '$apiBase/vodu-lookup?title=${Uri.encodeComponent(showTitle)}';
+    if (season != null && episode != null) {
+      url += '&season=$season&episode=$episode';
+    }
+
+    final res = await http.get(Uri.parse(url));
     if (res.statusCode != 200) {
       throw Exception('Vodu lookup failed: HTTP ${res.statusCode}');
     }
@@ -46,9 +40,7 @@ Future<void> main() async {
   try {
     await dotenv.load(fileName: "assets/env");
   } catch (_) {
-    // No .env file present - that's fine. The app talks to a secure proxy
-    // (see _apiBase below) and no longer needs real API keys client-side,
-    // so a public web build with no .env works perfectly well.
+    // No .env file present
   }
   runApp(const SmartMoviesApp());
 }
@@ -60,7 +52,7 @@ class AppStrings {
   final bool isArabic;
   const AppStrings(this.isArabic);
 
-  String get appName       => isArabic ? 'نيـــرو'               : 'NERO';
+  String get appName         => isArabic ? 'نيـــرو'                : 'NERO';
   String get subtitle      => isArabic ? 'مرشدك السينمائي'        : 'Your Cinema Guide';
   String get searchHint    => isArabic ? 'اكتب هنا...'            : 'Search here...';
   String get searching     => isArabic ? 'جاري البحث...'          : 'Searching...';
@@ -68,12 +60,12 @@ class AppStrings {
                                         : 'Type a movie or show you love\nand I\'ll suggest similar ones';
   String get tapForSimilar => isArabic ? 'اضغط لاقتراحات مشابهة'  : 'Tap for similar titles';
   String get home          => isArabic ? 'الرئيسية'               : 'Home';
-  String get favorites     => isArabic ? 'المفضلة'                : 'Favorites';
+  String get favorites     => isArabic ? 'المفضلة'                 : 'Favorites';
   String get history       => isArabic ? 'سجل البحث'              : 'Search History';
-  String get deleteAll     => isArabic ? 'حذف الكل'               : 'Clear All';
+  String get deleteAll      => isArabic ? 'حذف الكل'               : 'Clear All';
   String get noFavorites   => isArabic ? 'لا توجد مفضلات بعد'     : 'No favorites yet';
   String get myFavorites   => isArabic ? 'أفلامك المفضلة'         : 'My Favorites';
-  String get trailer       => isArabic ? 'التريلر'                : 'Trailer';
+  String get trailer       => isArabic ? 'التريلر'                 : 'Trailer';
   String get noStory       => isArabic ? 'عذراً، لا تتوفر تفاصيل لهذا العمل حالياً.'
                                         : 'Sorry, no details available for this title.';
   String get unknown       => isArabic ? 'غير معروف'              : 'Unknown';
@@ -81,7 +73,6 @@ class AppStrings {
   String get email         => isArabic ? 'البريد الإلكتروني'      : 'Email';
   String get instagram     => isArabic ? 'انستقرام'               : 'Instagram';
   String get telegram      => isArabic ? 'تيليجرام'               : 'Telegram';
-  // New: user-facing error/status messages
   String get searchError   => isArabic ? 'لم يتم العثور على نتائج، حاول باسم مختلف'
                                         : 'No results found, try a different title';
   String get networkError  => isArabic ? 'حدث خطأ في الاتصال، تحقق من الإنترنت وحاول مجدداً'
@@ -92,22 +83,35 @@ class AppStrings {
 
   // Seasons & Episodes
   String get seasonsAndEpisodes => isArabic ? 'المواسم والحلقات'        : 'Seasons & Episodes';
-  String get season             => isArabic ? 'الموسم'                  : 'Season';
-  String get episode            => isArabic ? 'الحلقة'                  : 'Episode';
-  String get episodes           => isArabic ? 'حلقة'                    : 'episodes';
-  String get loadingSeasons     => isArabic ? 'جاري تحميل المواسم...'   : 'Loading seasons...';
-  String get loadingEpisodes    => isArabic ? 'جاري تحميل الحلقات...'  : 'Loading episodes...';
+  String get season              => isArabic ? 'الموسم'                  : 'Season';
+  String get episode             => isArabic ? 'الحلقة'                  : 'Episode';
+  String get episodes            => isArabic ? 'حلقة'                    : 'episodes';
+  String get loadingSeasons      => isArabic ? 'جاري تحميل المواسم...'   : 'Loading seasons...';
+  String get loadingEpisodes     => isArabic ? 'جاري تحميل الحلقات...'  : 'Loading episodes...';
   String get seasonsLoadError   => isArabic ? 'تعذر تحميل المواسم'      : 'Could not load seasons';
   String get episodesLoadError  => isArabic ? 'تعذر تحميل الحلقات'     : 'Could not load episodes';
   String get watchEpisode       => isArabic ? 'مشاهدة الحلقة'           : 'Watch episode';
   String get watchLinkError     => isArabic ? 'تعذر فتح رابط المشاهدة'  : 'Could not open the watch link';
-  String get noOverview         => isArabic ? 'لا يتوفر وصف لهذه الحلقة' : 'No description available';
+  String get noOverview          => isArabic ? 'لا يتوفر وصف لهذه الحلقة' : 'No description available';
 
-  // Where to watch (legal providers via TMDB/JustWatch)
+  // Where to watch
   String get whereToWatch        => isArabic ? 'مشاهدة الفلم'           : 'Watch Movie';
+  String get watchShow           => isArabic ? 'مشاهدة الحلقات'          : 'Watch Episodes';
   String get noWatchProviders     => isArabic ? 'لا تتوفر معلومات مشاهدة لهذا العمل في منطقتك'
                                         : 'No watch info available for this title in your region';
   String get watchProvidersError => isArabic ? 'تعذر تحميل معلومات المشاهدة' : 'Could not load watch info';
+
+  // Browse / Discover
+  String get browse            => isArabic ? 'تصفح حسب النوع'         : 'Browse by Genre';
+  String get moviesTab         => isArabic ? 'أفلام'                    : 'Movies';
+  String get showsTab          => isArabic ? 'مسلسلات'                 : 'TV Shows';
+  String get allGenres         => isArabic ? 'الكل'                     : 'All';
+  String get sortTopRated      => isArabic ? 'الأعلى تقييماً'          : 'Top Rated';
+  String get sortLowRated      => isArabic ? 'الأقل تقييماً'           : 'Lowest Rated';
+  String get sortPopular       => isArabic ? 'الأكثر شعبية'            : 'Most Popular';
+  String get loadMore          => isArabic ? 'تحميل المزيد'            : 'Load more';
+  String get noBrowseResults   => isArabic ? 'لا توجد نتائج بهذا التصنيف' : 'No results for this genre';
+  String get browseLoadError   => isArabic ? 'تعذر تحميل النتائج'      : 'Could not load results';
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -128,11 +132,6 @@ class SmartMoviesApp extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════════
-//  SCROLL BEHAVIOR (enables mouse/trackpad drag-to-scroll on
-//  desktop/web/iPad, not just touch — fixes PageView only
-//  responding to the arrow buttons on PC).
-// ═══════════════════════════════════════════════════════════
 class AppScrollBehavior extends MaterialScrollBehavior {
   @override
   Set<PointerDeviceKind> get dragDevices => {
@@ -145,9 +144,7 @@ class AppScrollBehavior extends MaterialScrollBehavior {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  RESPONSIVE WRAPPER
-//  Keeps the phone-style layout intact but centers it and lets
-//  it scale to full screen height on desktop / iPad screens.
+//  RESPONSIVE SHELL
 // ═══════════════════════════════════════════════════════════
 class ResponsiveShell extends StatelessWidget {
   final Widget child;
@@ -319,7 +316,7 @@ class MovieCard {
   final String genresEn;
   final String trailerUrl;
   final int tmdbId;
-  final String mediaType; // 'tv' or 'movie'
+  final String mediaType; 
 
   MovieCard({
     required this.titleAr, required this.titleEn,
@@ -359,7 +356,6 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-
 class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
@@ -387,9 +383,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   late Animation<double> _breathAnim;
   late PageController _pageController;
 
-  // Base URL of the secure proxy (a Cloudflare Worker, see worker.js) that
-  // holds the real Groq/TMDB API keys server-side. Delegates to ApiConfig
-  // so the SeasonsScreen/EpisodesScreen widgets can use the exact same base.
   String get _apiBase => ApiConfig.apiBase;
 
   static const List<Map<String, String>> _featuredTitles = [
@@ -432,7 +425,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  // Small helper to show a SnackBar safely without duplicating boilerplate everywhere.
   void _showMessage(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -469,7 +461,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     for (final item in _featuredTitles) {
       try {
         final res = await http.get(Uri.parse(
-          '$_apiBase/tmdb/search/multi?query=${Uri.encodeComponent(item['title']!)}&language=en-US',
+          '$_apiBase/tmdb/search/multi?query=${Uri.encodeComponent(item['type'] == 'movie' ? item['title']! : item['title']!)}&language=en-US',
         ));
         if (res.statusCode == 200) {
           final results = jsonDecode(res.body)['results'] as List;
@@ -477,11 +469,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             final poster = results[0]['poster_path'] ?? '';
             if (poster.isNotEmpty) urls.add('https://image.tmdb.org/t/p/w500$poster');
           }
-        } else {
-          debugPrint('TMDB poster fetch failed (${item['title']}): HTTP ${res.statusCode}');
         }
       } catch (e) {
-        debugPrint('TMDB poster fetch error (${item['title']}): $e');
+        debugPrint('TMDB poster fetch error: $e');
       }
     }
     if (mounted && urls.isNotEmpty) {
@@ -591,11 +581,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 (b['popularity'] ?? 0).toDouble().compareTo((a['popularity'] ?? 0).toDouble()));
             return results;
           }
-        } else {
-          debugPrint('TMDB search failed ($lang) for "$query": HTTP ${res.statusCode}');
         }
       } catch (e) {
-        debugPrint('TMDB search error ($lang) for "$query": $e');
+        debugPrint('TMDB search error: $e');
       }
     }
     return [];
@@ -645,7 +633,6 @@ CRITICAL RULES:
           }),
         );
         if (res.statusCode != 200) {
-          debugPrint('Groq API error (attempt $attempt): HTTP ${res.statusCode} - ${res.body}');
           if (attempt < 3) await Future.delayed(const Duration(seconds: 1));
           continue;
         }
@@ -653,8 +640,7 @@ CRITICAL RULES:
         String raw = (data['choices'][0]['message']['content'] as String).trim();
         if (raw.startsWith('```json')) raw = raw.replaceFirst('```json', '').replaceAll('```', '');
         return jsonDecode(raw.trim());
-      } catch (e) {
-        debugPrint('Groq API exception (attempt $attempt): $e');
+      } catch (_) {
         if (attempt < 3) await Future.delayed(const Duration(seconds: 1));
       }
     }
@@ -699,12 +685,8 @@ CRITICAL RULES:
           rating = vote > 0 ? (vote as num).toStringAsFixed(1) : 'N/A';
           final genresList = d['genres'] as List<dynamic>? ?? [];
           genres = genresList.take(2).map((g) => g['name']).join(' • ');
-        } else {
-          debugPrint('TMDB AR details failed for id $id: HTTP ${detailArRes.statusCode}');
         }
-      } catch (e) {
-        debugPrint('TMDB AR details error for id $id: $e');
-      }
+      } catch (_) {}
 
       String titleEn = titleQuery, storyEn = '', genresEn = '';
       try {
@@ -719,19 +701,13 @@ CRITICAL RULES:
           final genresListEn = d['genres'] as List<dynamic>? ?? [];
           genresEn = genresListEn.take(2).map((g) => g['name']).join(' • ');
           if (genres.trim().isEmpty) genres = genresEn;
-        } else {
-          debugPrint('TMDB EN details failed for id $id: HTTP ${detailEnRes.statusCode}');
         }
-      } catch (e) {
-        debugPrint('TMDB EN details error for id $id: $e');
-      }
+      } catch (_) {}
 
       if (story.trim().isEmpty) story = s.noStory;
       if (storyEn.trim().isEmpty) storyEn = story;
       if (genresEn.trim().isEmpty) genresEn = genres;
 
-      // Fixed: build a clean YouTube URL instead of the broken markdown-style
-      // concatenation that produced an invalid, unlaunchable link.
       String trailerUrl = '';
       try {
         final videoRes = await http.get(Uri.parse(
@@ -746,16 +722,10 @@ CRITICAL RULES:
             try {
               final teaser = videoData.firstWhere((v) => v['site'] == 'YouTube' && v['type'] == 'Teaser');
               trailerUrl = 'https://www.youtube.com/watch?v=${teaser['key']}';
-            } catch (_) {
-              // No trailer or teaser available for this title - trailerUrl stays empty.
-            }
+            } catch (_) {}
           }
-        } else {
-          debugPrint('TMDB videos fetch failed for id $id: HTTP ${videoRes.statusCode}');
         }
-      } catch (e) {
-        debugPrint('TMDB videos fetch error for id $id: $e');
-      }
+      } catch (_) {}
 
       if (titleAr.trim().isEmpty) titleAr = titleEn;
       if (titleEn.trim().isEmpty) titleEn = titleAr;
@@ -769,8 +739,7 @@ CRITICAL RULES:
         tmdbId: id is int ? id : int.tryParse(id.toString()) ?? 0,
         mediaType: mediaType,
       );
-    } catch (e) {
-      debugPrint('_fetchFromTmdb error for "$titleQuery": $e');
+    } catch (_) {
       return null;
     }
   }
@@ -819,8 +788,7 @@ CRITICAL RULES:
               item['year'].toString(),
               originalQuery: item['titleAr'].toString(),
             );
-          } catch (e) {
-            debugPrint('Rec fetch error for "${item['titleEn']}": $e');
+          } catch (_) {
             return null;
           }
         }).toList(),
@@ -837,8 +805,7 @@ CRITICAL RULES:
       if (finalMovies.isEmpty) {
         _showMessage(s.searchError);
       }
-    } catch (e) {
-      debugPrint('_askNero error: $e');
+    } catch (_) {
       setState(() => _isLoading = false);
       _showMessage(s.networkError);
     }
@@ -849,15 +816,6 @@ CRITICAL RULES:
     setState(() { _movies = [movie]; _hasResult = true; _currentCard = 0; });
     if (_pageController.hasClients) _pageController.jumpToPage(0);
   }
-
-  // ─────────────────────────────────────────────────────────
-  // "Where to Watch" — legal streaming availability for movies,
-  // sourced directly from TMDB's official watch/providers endpoint
-  // (backed by JustWatch). Opens TMDB's own watch page which lists
-  // legitimate providers (Netflix, Shahid, OSN, etc.) for the movie
-  // in the user's region, instead of pointing at unlicensed sources.
-  // ─────────────────────────────────────────────────────────
-  
 
   @override
   Widget build(BuildContext context) {
@@ -1033,10 +991,23 @@ CRITICAL RULES:
                             ),
                           )
                       : null,
-                  watchLabel: s.whereToWatch,
-                 onWatchTap: _movies[index].mediaType == 'movie' 
-    ? () => PlayerEngine.instance.openMovie(context, _movies[index].tmdbId) 
-    : null,
+                  watchLabel: _movies[index].mediaType == 'movie' ? s.whereToWatch : s.watchShow,
+                  onWatchTap: () {
+                    if (_movies[index].mediaType == 'movie') {
+                      PlayerEngine.instance.openMovie(context, _movies[index].tmdbId);
+                    } else {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => SeasonsScreen(
+                            tmdbId: _movies[index].tmdbId,
+                            showTitle: _isArabic ? _movies[index].titleAr : _movies[index].titleEn,
+                            isArabic: _isArabic,
+                          ),
+                        ),
+                      );
+                    }
+                  },
                 ),
               ),
               ),
@@ -1214,6 +1185,17 @@ CRITICAL RULES:
             onTap: () { Navigator.pop(context); _resetHome(); },
           ),
           ListTile(
+            leading: const Icon(Icons.category_rounded, color: Colors.white),
+            title: Text(s.browse, style: const TextStyle(fontSize: 18)),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => BrowseScreen(isArabic: _isArabic)),
+              );
+            },
+          ),
+          ListTile(
             leading: const Icon(Icons.favorite, color: _accent),
             title: Text(s.favorites, style: const TextStyle(fontSize: 18)),
             onTap: () { Navigator.pop(context); _showFavorites(); },
@@ -1294,8 +1276,6 @@ CRITICAL RULES:
               },
             ),
             const SizedBox(height: 12),
-            // Fixed: this was previously a broken markdown-style URL that
-            // never launched. Now a plain, valid Instagram link.
             _ContactTile(
               icon: Icons.camera_alt_rounded, label: s.instagram, value: '@cs5s_',
               onTap: () async {
@@ -1583,9 +1563,6 @@ class _MovieCardWidget extends StatelessWidget {
                           ),
                         )
                       else
-                        // Previously the button silently disappeared with no
-                        // explanation. Now it's visible but disabled with a
-                        // clear message, instead of confusing the user.
                         SizedBox(
                           height: 32,
                           child: ElevatedButton.icon(
@@ -1757,17 +1734,15 @@ class _SeasonsScreenState extends State<SeasonsScreen> {
         final seasonsJson = (data['seasons'] as List?) ?? [];
         final seasons = seasonsJson
             .map((j) => SeasonInfo.fromJson(j))
-            .where((season) => season.seasonNumber > 0) // hide "Specials"
+            .where((season) => season.seasonNumber > 0) 
             .toList();
         if (!mounted) return;
         setState(() { _seasons = seasons; _isLoading = false; });
       } else {
-        debugPrint('Seasons load failed: HTTP ${res.statusCode}');
         if (!mounted) return;
         setState(() { _isLoading = false; _hasError = true; });
       }
-    } catch (e) {
-      debugPrint('Seasons load error: $e');
+    } catch (_) {
       if (!mounted) return;
       setState(() { _isLoading = false; _hasError = true; });
     }
@@ -1949,29 +1924,14 @@ class _EpisodesScreenState extends State<EpisodesScreen> {
         if (!mounted) return;
         setState(() { _episodes = episodes; _isLoading = false; });
       } else {
-        debugPrint('Episodes load failed: HTTP ${res.statusCode}');
         if (!mounted) return;
         setState(() { _isLoading = false; _hasError = true; });
       }
-    } catch (e) {
-      debugPrint('Episodes load error: $e');
+    } catch (_) {
       if (!mounted) return;
       setState(() { _isLoading = false; _hasError = true; });
     }
   }
-
-  void _showMessage(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: const Color(0xFF1A1A1A), behavior: SnackBarBehavior.floating),
-    );
-  }
-
-
-  bool _isResolvingLink = false;
-
- 
 
   @override
   Widget build(BuildContext context) {
@@ -1984,30 +1944,10 @@ class _EpisodesScreenState extends State<EpisodesScreen> {
           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: ResponsiveShell(child: Stack(
-        children: [
-          _buildBody(),
-          if (_isResolvingLink)
-            Container(
-              color: Colors.black.withOpacity(0.6),
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const CircularProgressIndicator(color: _accent, strokeWidth: 3),
-                    const SizedBox(height: 16),
-                    Text(
-                      widget.isArabic ? 'جاري تجهيز رابط المشاهدة...' : 'Preparing the watch link...',
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      )),
+      body: ResponsiveShell(child: _buildBody()),
     );
   }
+
   Widget _buildBody() {
     return _isLoading
           ? Center(
@@ -2033,7 +1973,7 @@ class _EpisodesScreenState extends State<EpisodesScreen> {
                       episodeLabel: s.episode,
                       watchLabel: s.watchEpisode,
                       noOverviewLabel: s.noOverview,
-                     onTap: () => PlayerEngine.instance.openEpisode(context, widget.tmdbId, widget.seasonNumber, episode.episodeNumber),
+                      onTap: () => PlayerEngine.instance.openEpisode(context, widget.tmdbId, widget.seasonNumber, episode.episodeNumber),
                     );
                   },
                 );
@@ -2140,5 +2080,603 @@ class _EpisodeTile extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  BROWSE / DISCOVER MODELS
+// ═══════════════════════════════════════════════════════════
+class GenreInfo {
+  final int id;
+  final String name;
+  GenreInfo({required this.id, required this.name});
+
+  factory GenreInfo.fromJson(Map<String, dynamic> j) =>
+      GenreInfo(id: j['id'] ?? 0, name: j['name'] ?? '');
+}
+
+class BrowseItem {
+  final int tmdbId;
+  final String mediaType;
+  final String title;
+  final String posterUrl;
+  final double rating;
+
+  BrowseItem({
+    required this.tmdbId, required this.mediaType,
+    required this.title, required this.posterUrl,
+    required this.rating,
+  });
+
+  factory BrowseItem.fromJson(Map<String, dynamic> j, String mediaType) {
+    final poster = j['poster_path'] ?? '';
+    return BrowseItem(
+      tmdbId: j['id'] ?? 0,
+      mediaType: mediaType,
+      title: (mediaType == 'tv' ? j['name'] : j['title']) ?? '',
+      posterUrl: poster.isNotEmpty ? 'https://image.tmdb.org/t/p/w342$poster' : '',
+      rating: (j['vote_average'] ?? 0.0).toDouble(),
+    );
+  }
+}
+
+enum BrowseSort { ratingDesc, ratingAsc, popularityDesc }
+
+// ═══════════════════════════════════════════════════════════
+//  BROWSE SCREEN
+// ═══════════════════════════════════════════════════════════
+class BrowseScreen extends StatefulWidget {
+  final bool isArabic;
+  const BrowseScreen({super.key, required this.isArabic});
+
+  @override
+  State<BrowseScreen> createState() => _BrowseScreenState();
+}
+
+class _BrowseScreenState extends State<BrowseScreen> {
+  static const Color _accent = Color(0xFFE50914);
+  static const Color _darkBg = Color(0xFF050505);
+
+  String _mediaType = 'movie'; 
+  int? _selectedGenreId;       
+  BrowseSort _sort = BrowseSort.popularityDesc;
+
+  List<GenreInfo> _genres = [];
+  List<BrowseItem> _items = [];
+  int _page = 1;
+  bool _isLoadingGenres = true;
+  bool _isLoadingItems = false;
+  bool _hasError = false;
+  bool _hasMore = true;
+
+  AppStrings get s => AppStrings(widget.isArabic);
+  String get _lang => widget.isArabic ? 'ar' : 'en-US';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadGenres();
+  }
+
+  String get _sortParam {
+    switch (_sort) {
+      case BrowseSort.ratingDesc:
+        return 'vote_average.desc';
+      case BrowseSort.ratingAsc:
+        return 'vote_average.asc';
+      case BrowseSort.popularityDesc:
+        return 'popularity.desc';
+    }
+  }
+
+  Future<void> _loadGenres() async {
+    setState(() { _isLoadingGenres = true; _hasError = false; });
+    try {
+      final res = await http.get(Uri.parse(
+        '${ApiConfig.apiBase}/tmdb/genre/$_mediaType/list?language=$_lang',
+      ));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final genresJson = (data['genres'] as List?) ?? [];
+        final genres = genresJson.map((j) => GenreInfo.fromJson(j)).toList();
+        if (!mounted) return;
+        setState(() { _genres = genres; _isLoadingGenres = false; });
+        _loadItems(reset: true);
+      } else {
+        if (!mounted) return;
+        setState(() { _isLoadingGenres = false; _hasError = true; });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() { _isLoadingGenres = false; _hasError = true; });
+    }
+  }
+
+  Future<void> _loadItems({bool reset = false}) async {
+    if (reset) {
+      setState(() { _items = []; _page = 1; _hasMore = true; _hasError = false; });
+    }
+    if (_isLoadingItems || !_hasMore) return;
+    setState(() => _isLoadingItems = true);
+
+    try {
+      final genreParam = _selectedGenreId != null ? '&with_genres=$_selectedGenreId' : '';
+      final res = await http.get(Uri.parse(
+        '${ApiConfig.apiBase}/tmdb/discover/$_mediaType'
+        '?language=$_lang&sort_by=$_sortParam&vote_count.gte=100&page=$_page$genreParam',
+      ));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final results = (data['results'] as List?) ?? [];
+        final totalPages = data['total_pages'] ?? 1;
+        final newItems = results.map((j) => BrowseItem.fromJson(j, _mediaType)).toList();
+
+        if (!mounted) return;
+        setState(() {
+          _items.addAll(newItems);
+          _isLoadingItems = false;
+          _hasMore = _page < totalPages;
+          _page++;
+        });
+      } else {
+        if (!mounted) return;
+        setState(() { _isLoadingItems = false; _hasError = _items.isEmpty; });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() { _isLoadingItems = false; _hasError = _items.isEmpty; });
+    }
+  }
+
+  void _changeMediaType(String type) {
+    if (type == _mediaType) return;
+    setState(() { _mediaType = type; _selectedGenreId = null; });
+    _loadGenres();
+  }
+
+  void _changeGenre(int? genreId) {
+    if (genreId == _selectedGenreId) return;
+    setState(() => _selectedGenreId = genreId);
+    _loadItems(reset: true);
+  }
+
+  void _changeSort(BrowseSort sort) {
+    if (sort == _sort) return;
+    setState(() => _sort = sort);
+    _loadItems(reset: true);
+  }
+
+  int _crossAxisCountFor(double width) {
+    if (width < 500) return 2;
+    if (width < 800) return 3;
+    if (width < 1100) return 4;
+    if (width < 1500) return 5;
+    return 6;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _darkBg,
+      appBar: AppBar(
+        backgroundColor: _darkBg,
+        elevation: 0,
+        title: Text(s.browse, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: Column(
+        children: [
+          _buildMediaTypeToggle(),
+          _buildSortRow(),
+          _isLoadingGenres
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Center(child: CircularProgressIndicator(color: _accent, strokeWidth: 2)),
+                )
+              : _buildGenreChips(),
+          const SizedBox(height: 8),
+          Expanded(child: _buildResultsGrid()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMediaTypeToggle() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Row(
+        children: [
+          Expanded(child: _buildToggleButton(s.moviesTab, _mediaType == 'movie', () => _changeMediaType('movie'))),
+          const SizedBox(width: 10),
+          Expanded(child: _buildToggleButton(s.showsTab, _mediaType == 'tv', () => _changeMediaType('tv'))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToggleButton(String label, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? _accent : const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        alignment: Alignment.center,
+        child: Text(label,
+          style: TextStyle(color: Colors.white, fontWeight: selected ? FontWeight.bold : FontWeight.normal, fontSize: 14)),
+      ),
+    );
+  }
+
+  Widget _buildSortRow() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _buildSortChip(s.sortPopular, BrowseSort.popularityDesc),
+            const SizedBox(width: 8),
+            _buildSortChip(s.sortTopRated, BrowseSort.ratingDesc),
+            const SizedBox(width: 8),
+            _buildSortChip(s.sortLowRated, BrowseSort.ratingAsc),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSortChip(String label, BrowseSort sort) {
+    final selected = _sort == sort;
+    return GestureDetector(
+      onTap: () => _changeSort(sort),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? _accent.withOpacity(0.15) : const Color(0xFF141414),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: selected ? _accent : Colors.white.withOpacity(0.1)),
+        ),
+        child: Text(label,
+          style: TextStyle(color: selected ? _accent : Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+      ),
+    );
+  }
+
+  Widget _buildGenreChips() {
+    return SizedBox(
+      height: 40,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        children: [
+          _buildGenreChip(s.allGenres, null),
+          const SizedBox(width: 8),
+          ..._genres.expand((g) => [_buildGenreChip(g.name, g.id), const SizedBox(width: 8)]),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGenreChip(String label, int? genreId) {
+    final selected = _selectedGenreId == genreId;
+    return GestureDetector(
+      onTap: () => _changeGenre(genreId),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? _accent : const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        alignment: Alignment.center,
+        child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 13)),
+      ),
+    );
+  }
+
+  Widget _buildResultsGrid() {
+    if (_hasError && _items.isEmpty) {
+      return Center(child: Text(s.browseLoadError, style: const TextStyle(color: Colors.white54)));
+    }
+    if (!_isLoadingItems && _items.isEmpty) {
+      return Center(child: Text(s.noBrowseResults, style: const TextStyle(color: Colors.white54)));
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount = _crossAxisCountFor(constraints.maxWidth);
+        return NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            if (notification.metrics.pixels >= notification.metrics.maxScrollExtent - 300) {
+              _loadItems();
+            }
+            return false;
+          },
+          child: GridView.builder(
+            padding: const EdgeInsets.all(16),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 16,
+              childAspectRatio: 0.58,
+            ),
+            itemCount: _items.length + (_hasMore ? 1 : 0),
+            itemBuilder: (context, index) {
+              if (index >= _items.length) {
+                return const Center(child: CircularProgressIndicator(color: _accent, strokeWidth: 2));
+              }
+              final item = _items[index];
+              return _BrowseGridTile(
+                item: item,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => DetailScreen(
+                      tmdbId: item.tmdbId,
+                      mediaType: item.mediaType,
+                      isArabic: widget.isArabic,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _BrowseGridTile extends StatelessWidget {
+  final BrowseItem item;
+  final VoidCallback onTap;
+  const _BrowseGridTile({required this.item, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  item.posterUrl.isNotEmpty
+                      ? Image.network(
+                          item.posterUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: Colors.white10,
+                            child: const Icon(Icons.movie_creation_outlined, color: Colors.white24),
+                          ),
+                        )
+                      : Container(
+                          color: Colors.white10,
+                          child: const Icon(Icons.movie_creation_outlined, color: Colors.white24),
+                        ),
+                  if (item.rating > 0)
+                    Positioned(
+                      top: 6, right: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(item.rating.toStringAsFixed(1),
+                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                            const SizedBox(width: 2),
+                            const Icon(Icons.star_rounded, color: Colors.amber, size: 11),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  DETAIL SCREEN (opened from Browse grid)
+// ═══════════════════════════════════════════════════════════
+class DetailScreen extends StatefulWidget {
+  final int tmdbId;
+  final String mediaType;
+  final bool isArabic;
+
+  const DetailScreen({
+    super.key, required this.tmdbId,
+    required this.mediaType, required this.isArabic,
+  });
+
+  @override
+  State<DetailScreen> createState() => _DetailScreenState();
+}
+
+class _DetailScreenState extends State<DetailScreen> {
+  static const Color _accent = Color(0xFFE50914);
+  static const Color _darkBg = Color(0xFF050505);
+
+  MovieCard? _movie;
+  bool _isLoading = true;
+  bool _hasError = false;
+
+  AppStrings get s => AppStrings(widget.isArabic);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDetail();
+  }
+
+  Future<void> _loadDetail() async {
+    try {
+      final movie = await fetchTmdbDetailById(widget.tmdbId, widget.mediaType, s: s);
+      if (!mounted) return;
+      if (movie != null) {
+        setState(() { _movie = movie; _isLoading = false; });
+      } else {
+        setState(() { _isLoading = false; _hasError = true; });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() { _isLoading = false; _hasError = true; });
+    }
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: const Color(0xFF1A1A1A), behavior: SnackBarBehavior.floating),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _darkBg,
+      appBar: AppBar(
+        backgroundColor: _darkBg,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: _accent, strokeWidth: 3))
+          : (_hasError || _movie == null)
+              ? Center(child: Text(s.browseLoadError, style: const TextStyle(color: Colors.white54)))
+              : _MovieCardWidget(
+                  movie: _movie!,
+                  isFav: false,
+                  onFavTap: () {},
+                  trailerLabel: s.trailer,
+                  isArabic: widget.isArabic,
+                  noTrailerMessage: s.noTrailer,
+                  trailerErrorMessage: s.trailerError,
+                  onShowMessage: _showMessage,
+                  seasonsLabel: s.seasonsAndEpisodes,
+                  onSeasonsTap: _movie!.mediaType == 'tv'
+                      ? () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => SeasonsScreen(
+                                tmdbId: _movie!.tmdbId,
+                                showTitle: widget.isArabic ? _movie!.titleAr : _movie!.titleEn,
+                                isArabic: widget.isArabic,
+                              ),
+                            ),
+                          )
+                      : null,
+                  watchLabel: _movie!.mediaType == 'movie' ? s.whereToWatch : s.watchShow,
+                  onWatchTap: () {
+                    if (_movie!.mediaType == 'movie') {
+                      PlayerEngine.instance.openMovie(context, _movie!.tmdbId);
+                    } else {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => SeasonsScreen(
+                            tmdbId: _movie!.tmdbId,
+                            showTitle: widget.isArabic ? _movie!.titleAr : _movie!.titleEn,
+                            isArabic: widget.isArabic,
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                ),
+    );
+  }
+}
+
+Future<MovieCard?> fetchTmdbDetailById(int tmdbId, String mediaType, {required AppStrings s}) async {
+  try {
+    String titleAr = '', titleEn = '', story = '', storyEn = '';
+    String rating = '', genres = '', genresEn = '', year = s.unknown, posterPath = '';
+    String trailerUrl = '';
+
+    final detailArRes = await http.get(Uri.parse(
+      '${ApiConfig.apiBase}/tmdb/$mediaType/$tmdbId?language=ar',
+    ));
+    if (detailArRes.statusCode == 200) {
+      final d = jsonDecode(detailArRes.body);
+      titleAr = (mediaType == 'tv' ? d['name'] : d['title']) ?? '';
+      story = d['overview'] ?? '';
+      final vote = d['vote_average'] ?? 0.0;
+      rating = vote > 0 ? (vote as num).toStringAsFixed(1) : 'N/A';
+      final genresList = d['genres'] as List<dynamic>? ?? [];
+      genres = genresList.take(2).map((g) => g['name']).join(' • ');
+      posterPath = d['poster_path'] ?? '';
+      final releaseDate = (mediaType == 'tv' ? d['first_air_date'] : d['release_date']) ?? '';
+      if (releaseDate.toString().length >= 4) year = releaseDate.toString().substring(0, 4);
+    }
+
+    final detailEnRes = await http.get(Uri.parse(
+      '${ApiConfig.apiBase}/tmdb/$mediaType/$tmdbId?language=en-US',
+    ));
+    if (detailEnRes.statusCode == 200) {
+      final d = jsonDecode(detailEnRes.body);
+      titleEn = (mediaType == 'tv' ? d['name'] : d['title']) ?? '';
+      storyEn = d['overview'] ?? '';
+      final genresListEn = d['genres'] as List<dynamic>? ?? [];
+      genresEn = genresListEn.take(2).map((g) => g['name']).join(' • ');
+      if (posterPath.isEmpty) posterPath = d['poster_path'] ?? '';
+    }
+
+    if (story.trim().isEmpty) story = storyEn.isNotEmpty ? storyEn : s.noStory;
+    if (storyEn.trim().isEmpty) storyEn = story;
+    if (genres.trim().isEmpty) genres = genresEn;
+    if (genresEn.trim().isEmpty) genresEn = genres;
+    if (titleAr.trim().isEmpty) titleAr = titleEn;
+    if (titleEn.trim().isEmpty) titleEn = titleAr;
+
+    if (titleAr.isEmpty && titleEn.isEmpty) return null; 
+
+    try {
+      final videoRes = await http.get(Uri.parse(
+        '${ApiConfig.apiBase}/tmdb/$mediaType/$tmdbId/videos?language=en-US',
+      ));
+      if (videoRes.statusCode == 200) {
+        final videoData = jsonDecode(videoRes.body)['results'] as List;
+        try {
+          final trailer = videoData.firstWhere((v) => v['site'] == 'YouTube' && v['type'] == 'Trailer');
+          trailerUrl = 'https://www.youtube.com/watch?v=${trailer['key']}';
+        } catch (_) {
+          try {
+            final teaser = videoData.firstWhere((v) => v['site'] == 'YouTube' && v['type'] == 'Teaser');
+            trailerUrl = 'https://www.youtube.com/watch?v=${teaser['key']}';
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+
+    return MovieCard(
+      titleAr: titleAr, titleEn: titleEn, year: year,
+      story: story, storyEn: storyEn,
+      imageUrl: posterPath.isNotEmpty ? 'https://image.tmdb.org/t/p/w500$posterPath' : '',
+      rating: rating, genres: genres, genresEn: genresEn,
+      trailerUrl: trailerUrl, tmdbId: tmdbId, mediaType: mediaType,
+    );
+  } catch (_) {
+    return null;
   }
 }
