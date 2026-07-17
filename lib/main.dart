@@ -1831,7 +1831,7 @@ class _WatchScreenState extends State<WatchScreen> {
     }
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
-      child: _NeroInlinePlayer(url: url),
+      child: _NeroInlinePlayer(key: ValueKey(url), url: url), // ← الحل هنا
     );
   }
 
@@ -1870,7 +1870,6 @@ class _WatchScreenState extends State<WatchScreen> {
 
   Widget _serverChip(int n) {
     final selected = _activeServer == n;
-    // جميع السيرفرات متاحة دائماً
     return GestureDetector(
       onTap: () => _selectServer(n),
       child: AnimatedContainer(
@@ -1967,7 +1966,7 @@ class _WatchScreenState extends State<WatchScreen> {
 // Embeds a playable URL as an <iframe> inside the Flutter Web canvas.
 class _NeroInlinePlayer extends StatefulWidget {
   final String url;
-  const _NeroInlinePlayer({required this.url});
+  const _NeroInlinePlayer({super.key, required this.url});
 
   @override
   State<_NeroInlinePlayer> createState() => _NeroInlinePlayerState();
