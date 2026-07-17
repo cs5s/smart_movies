@@ -97,7 +97,6 @@ class AppStrings {
   // Watch screen
   String get chooseServer      => isArabic ? 'اختر سيرفر المشاهدة'     : 'Choose a server';
   String get serverLabel       => isArabic ? 'سيرفر'                    : 'Server';
-  String get serverSoon        => isArabic ? 'قريباً'                   : 'Soon';
   String get serverUnavailable => isArabic ? 'هذا السيرفر غير متوفر حالياً، جرّب سيرفر آخر'
                                             : 'This server is not available yet, try another one';
   String get loadingServer      => isArabic ? 'جاري تجهيز السيرفر...'    : 'Preparing the server...';
@@ -386,7 +385,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     {'title': 'Death Note',      'type': 'tv'},
   ];
 
-  // Quick genre shortcuts shown on the home screen.
   static const List<Map<String, String>> _quickGenresAr = [
     {'name': 'أكشن',    'icon': 'flash'},
     {'name': 'دراما',    'icon': 'drama'},
@@ -1782,10 +1780,10 @@ class _WatchScreenState extends State<WatchScreen> {
   @override
   void initState() {
     super.initState();
-    _loadServer1();
+    _loadServers();
   }
 
- Future<void> _loadServer1() async {
+  Future<void> _loadServers() async {
     setState(() { _isLoading = true; _loadFailed = false; });
     try {
       final id = widget.tmdbId;
@@ -1793,14 +1791,14 @@ class _WatchScreenState extends State<WatchScreen> {
 
       if (isMovie) {
         _serverUrls[1] = 'https://vidsrc.to/embed/movie/$id';
-        _serverUrls[2] = 'https://vidlink.pro/embed/movie/$id?primaryColor=E50914';
+        _serverUrls[2] = 'https://vidlink.pro/embed/movie/$id';
         _serverUrls[3] = 'https://vidsrc.xyz/embed/movie/$id';
         _serverUrls[4] = 'https://player.autoembed.cc/embed/movie/$id';
       } else {
         final s = widget.season;
         final e = widget.episode;
         _serverUrls[1] = 'https://vidsrc.to/embed/tv/$id/$s/$e';
-        _serverUrls[2] = 'https://vidlink.pro/embed/tv/$id/$s/$e?primaryColor=E50914';
+        _serverUrls[2] = 'https://vidlink.pro/embed/tv/$id/$s/$e';
         _serverUrls[3] = 'https://vidsrc.xyz/embed/tv/$id/$s/$e';
         _serverUrls[4] = 'https://player.autoembed.cc/embed/tv/$id/$s/$e';
       }
@@ -1857,7 +1855,7 @@ class _WatchScreenState extends State<WatchScreen> {
             if (_activeServer == 1 && _loadFailed) ...[
               const SizedBox(height: 14),
               OutlinedButton.icon(
-                onPressed: _loadServer1,
+                onPressed: _loadServers,
                 icon: const Icon(Icons.refresh_rounded, size: 16, color: Colors.white70),
                 label: Text(widget.isArabic ? 'إعادة المحاولة' : 'Retry',
                   style: const TextStyle(color: Colors.white70, fontSize: 12)),
@@ -1872,7 +1870,7 @@ class _WatchScreenState extends State<WatchScreen> {
 
   Widget _serverChip(int n) {
     final selected = _activeServer == n;
-    final available = (_serverUrls[n] ?? '')!.isNotEmpty;
+    // جميع السيرفرات متاحة دائماً
     return GestureDetector(
       onTap: () => _selectServer(n),
       child: AnimatedContainer(
@@ -1890,14 +1888,6 @@ class _WatchScreenState extends State<WatchScreen> {
           const SizedBox(width: 6),
           Text('${s.serverLabel} $n',
             style: TextStyle(color: selected ? Colors.white : Colors.white60, fontWeight: FontWeight.bold, fontSize: 13)),
-          if (!available && !(n == 1 && _isLoading)) ...[
-            const SizedBox(width: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(6)),
-              child: Text(s.serverSoon, style: const TextStyle(color: Colors.white38, fontSize: 10)),
-            ),
-          ],
         ]),
       ),
     );
