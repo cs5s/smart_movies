@@ -1,12 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:html' as html;
+import 'dart:ui_web' as ui_web;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'core/player/player_engine.dart'; 
 
 // ═══════════════════════════════════════════════════════════
 //  API CONFIG
@@ -18,15 +19,12 @@ class ApiConfig {
     return (override != null && override.isNotEmpty) ? override : defaultApiBase;
   }
 
-  // ─────────────────────────────────────────────────────────
-  // VODU integration
-  // ─────────────────────────────────────────────────────────
+  // VODU integration — returns a map that should contain a playable "url" field.
   static Future<Map<String, dynamic>> lookupVoduUrl(String showTitle, {int? season, int? episode}) async {
     String url = '$apiBase/vodu-lookup?title=${Uri.encodeComponent(showTitle)}';
     if (season != null && episode != null) {
       url += '&season=$season&episode=$episode';
     }
-
     final res = await http.get(Uri.parse(url));
     if (res.statusCode != 200) {
       throw Exception('Vodu lookup failed: HTTP ${res.statusCode}');
@@ -53,33 +51,33 @@ class AppStrings {
   const AppStrings(this.isArabic);
 
   String get appName         => isArabic ? 'نيـــرو'                : 'NERO';
-  String get subtitle      => isArabic ? 'مرشدك السينمائي'        : 'Your Cinema Guide';
-  String get searchHint    => isArabic ? 'اكتب هنا...'            : 'Search here...';
-  String get searching     => isArabic ? 'جاري البحث...'          : 'Searching...';
-  String get emptyHint     => isArabic ? 'اكتب فيلم أو مسلسل تحبه\nوسأقترحلك أمور شبيهة'
-                                        : 'Type a movie or show you love\nand I\'ll suggest similar ones';
-  String get tapForSimilar => isArabic ? 'اضغط لاقتراحات مشابهة'  : 'Tap for similar titles';
-  String get home          => isArabic ? 'الرئيسية'               : 'Home';
-  String get favorites     => isArabic ? 'المفضلة'                 : 'Favorites';
-  String get history       => isArabic ? 'سجل البحث'              : 'Search History';
-  String get deleteAll      => isArabic ? 'حذف الكل'               : 'Clear All';
-  String get noFavorites   => isArabic ? 'لا توجد مفضلات بعد'     : 'No favorites yet';
-  String get myFavorites   => isArabic ? 'أفلامك المفضلة'         : 'My Favorites';
-  String get trailer       => isArabic ? 'التريلر'                 : 'Trailer';
-  String get noStory       => isArabic ? 'عذراً، لا تتوفر تفاصيل لهذا العمل حالياً.'
-                                        : 'Sorry, no details available for this title.';
-  String get unknown       => isArabic ? 'غير معروف'              : 'Unknown';
-  String get developer     => isArabic ? 'مطور تطبيق نيـــرو'     : 'NERO App Developer';
-  String get email         => isArabic ? 'البريد الإلكتروني'      : 'Email';
-  String get instagram     => isArabic ? 'انستقرام'               : 'Instagram';
-  String get telegram      => isArabic ? 'تيليجرام'               : 'Telegram';
-  String get searchError   => isArabic ? 'لم يتم العثور على نتائج، حاول باسم مختلف'
-                                        : 'No results found, try a different title';
-  String get networkError  => isArabic ? 'حدث خطأ في الاتصال، تحقق من الإنترنت وحاول مجدداً'
-                                        : 'Connection error, check your internet and try again';
-  String get trailerError  => isArabic ? 'تعذر فتح رابط التريلر'  : 'Could not open the trailer link';
-  String get noTrailer     => isArabic ? 'لا يتوفر تريلر لهذا العمل' : 'No trailer available for this title';
-  String get linkError     => isArabic ? 'تعذر فتح الرابط'         : 'Could not open the link';
+  String get subtitle        => isArabic ? 'مرشدك السينمائي'        : 'Your Cinema Guide';
+  String get searchHint      => isArabic ? 'اكتب هنا...'            : 'Search here...';
+  String get searching       => isArabic ? 'جاري البحث...'          : 'Searching...';
+  String get emptyHint       => isArabic ? 'اكتب فيلم أو مسلسل تحبه\nوسأقترحلك أمور شبيهة'
+                                          : 'Type a movie or show you love\nand I\'ll suggest similar ones';
+  String get tapForSimilar   => isArabic ? 'اضغط لاقتراحات مشابهة'  : 'Tap for similar titles';
+  String get home            => isArabic ? 'الرئيسية'               : 'Home';
+  String get favorites       => isArabic ? 'المفضلة'                 : 'Favorites';
+  String get history         => isArabic ? 'سجل البحث'              : 'Search History';
+  String get deleteAll       => isArabic ? 'حذف الكل'               : 'Clear All';
+  String get noFavorites     => isArabic ? 'لا توجد مفضلات بعد'     : 'No favorites yet';
+  String get myFavorites     => isArabic ? 'أفلامك المفضلة'         : 'My Favorites';
+  String get trailer         => isArabic ? 'التريلر'                 : 'Trailer';
+  String get noStory         => isArabic ? 'عذراً، لا تتوفر تفاصيل لهذا العمل حالياً.'
+                                          : 'Sorry, no details available for this title.';
+  String get unknown         => isArabic ? 'غير معروف'              : 'Unknown';
+  String get developer       => isArabic ? 'مطور تطبيق نيـــرو'     : 'NERO App Developer';
+  String get email           => isArabic ? 'البريد الإلكتروني'      : 'Email';
+  String get instagram       => isArabic ? 'انستقرام'               : 'Instagram';
+  String get telegram        => isArabic ? 'تيليجرام'               : 'Telegram';
+  String get searchError     => isArabic ? 'لم يتم العثور على نتائج، حاول باسم مختلف'
+                                          : 'No results found, try a different title';
+  String get networkError    => isArabic ? 'حدث خطأ في الاتصال، تحقق من الإنترنت وحاول مجدداً'
+                                          : 'Connection error, check your internet and try again';
+  String get trailerError    => isArabic ? 'تعذر فتح رابط التريلر'  : 'Could not open the trailer link';
+  String get noTrailer       => isArabic ? 'لا يتوفر تريلر لهذا العمل' : 'No trailer available for this title';
+  String get linkError       => isArabic ? 'تعذر فتح الرابط'         : 'Could not open the link';
 
   // Seasons & Episodes
   String get seasonsAndEpisodes => isArabic ? 'المواسم والحلقات'        : 'Seasons & Episodes';
@@ -88,18 +86,14 @@ class AppStrings {
   String get episodes            => isArabic ? 'حلقة'                    : 'episodes';
   String get loadingSeasons      => isArabic ? 'جاري تحميل المواسم...'   : 'Loading seasons...';
   String get loadingEpisodes     => isArabic ? 'جاري تحميل الحلقات...'  : 'Loading episodes...';
-  String get seasonsLoadError   => isArabic ? 'تعذر تحميل المواسم'      : 'Could not load seasons';
-  String get episodesLoadError  => isArabic ? 'تعذر تحميل الحلقات'     : 'Could not load episodes';
-  String get watchEpisode       => isArabic ? 'مشاهدة الحلقة'           : 'Watch episode';
-  String get watchLinkError     => isArabic ? 'تعذر فتح رابط المشاهدة'  : 'Could not open the watch link';
+  String get seasonsLoadError    => isArabic ? 'تعذر تحميل المواسم'      : 'Could not load seasons';
+  String get episodesLoadError   => isArabic ? 'تعذر تحميل الحلقات'     : 'Could not load episodes';
+  String get watchEpisode        => isArabic ? 'مشاهدة الحلقة'           : 'Watch episode';
   String get noOverview          => isArabic ? 'لا يتوفر وصف لهذه الحلقة' : 'No description available';
 
   // Where to watch
   String get whereToWatch        => isArabic ? 'مشاهدة الفلم'           : 'Watch Movie';
   String get watchShow           => isArabic ? 'مشاهدة الحلقات'          : 'Watch Episodes';
-  String get noWatchProviders     => isArabic ? 'لا تتوفر معلومات مشاهدة لهذا العمل في منطقتك'
-                                        : 'No watch info available for this title in your region';
-  String get watchProvidersError => isArabic ? 'تعذر تحميل معلومات المشاهدة' : 'Could not load watch info';
 
   // Browse / Discover
   String get browse            => isArabic ? 'تصفح حسب النوع'         : 'Browse by Genre';
@@ -109,9 +103,17 @@ class AppStrings {
   String get sortTopRated      => isArabic ? 'الأعلى تقييماً'          : 'Top Rated';
   String get sortLowRated      => isArabic ? 'الأقل تقييماً'           : 'Lowest Rated';
   String get sortPopular       => isArabic ? 'الأكثر شعبية'            : 'Most Popular';
-  String get loadMore          => isArabic ? 'تحميل المزيد'            : 'Load more';
   String get noBrowseResults   => isArabic ? 'لا توجد نتائج بهذا التصنيف' : 'No results for this genre';
   String get browseLoadError   => isArabic ? 'تعذر تحميل النتائج'      : 'Could not load results';
+  String get exploreGenres     => isArabic ? 'استكشف التصنيفات'        : 'Explore Genres';
+
+  // Watch screen
+  String get chooseServer      => isArabic ? 'اختر سيرفر المشاهدة'     : 'Choose a server';
+  String get serverLabel       => isArabic ? 'سيرفر'                    : 'Server';
+  String get serverSoon        => isArabic ? 'قريباً'                   : 'Soon';
+  String get serverUnavailable => isArabic ? 'هذا السيرفر غير متوفر حالياً، جرّب سيرفر آخر'
+                                            : 'This server is not available yet, try another one';
+  String get loadingServer      => isArabic ? 'جاري تجهيز السيرفر...'    : 'Preparing the server...';
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -145,6 +147,10 @@ class AppScrollBehavior extends MaterialScrollBehavior {
 
 // ═══════════════════════════════════════════════════════════
 //  RESPONSIVE SHELL
+//  Keeps a polished "phone frame" look for the main browsing
+//  screens on large monitors (so posters never look stretched
+//  or squished), while wide=true screens (like the player) can
+//  opt out and use the full width instead.
 // ═══════════════════════════════════════════════════════════
 class ResponsiveShell extends StatelessWidget {
   final Widget child;
@@ -237,64 +243,64 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       backgroundColor: Colors.black,
       body: ResponsiveShell(
         child: AnimatedBuilder(
-        animation: Listenable.merge([_fadeAnim, _glowAnim, _exitAnim]),
-        builder: (context, _) => Opacity(
-          opacity: 1.0 - _exitAnim.value,
-          child: Center(
-            child: FadeTransition(
-              opacity: _fadeAnim,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Stack(alignment: Alignment.center, children: [
-                    Container(
-                      width: 120, height: 120,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: [BoxShadow(
-                          color: _accent.withOpacity(_glowAnim.value * 0.6),
-                          blurRadius: 60, spreadRadius: 20,
-                        )],
+          animation: Listenable.merge([_fadeAnim, _glowAnim, _exitAnim]),
+          builder: (context, _) => Opacity(
+            opacity: 1.0 - _exitAnim.value,
+            child: Center(
+              child: FadeTransition(
+                opacity: _fadeAnim,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Stack(alignment: Alignment.center, children: [
+                      Container(
+                        width: 120, height: 120,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: [BoxShadow(
+                            color: _accent.withOpacity(_glowAnim.value * 0.6),
+                            blurRadius: 60, spreadRadius: 20,
+                          )],
+                        ),
                       ),
-                    ),
-                    Container(
-                      width: 90, height: 90,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: _accent.withOpacity(0.1),
-                        border: Border.all(color: _accent.withOpacity(0.6), width: 2),
+                      Container(
+                        width: 90, height: 90,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: _accent.withOpacity(0.1),
+                          border: Border.all(color: _accent.withOpacity(0.6), width: 2),
+                        ),
+                        child: const Icon(Icons.movie_creation_rounded, color: _accent, size: 44),
                       ),
-                      child: const Icon(Icons.movie_creation_rounded, color: _accent, size: 44),
-                    ),
-                  ]),
-                  const SizedBox(height: 32),
-                  Text('نيـــرو', style: TextStyle(
-                    fontSize: 48, fontWeight: FontWeight.w900,
-                    color: Colors.white, letterSpacing: 6,
-                    shadows: [Shadow(color: _accent.withOpacity(_glowAnim.value * 0.8), blurRadius: 20)],
-                  )),
-                  const SizedBox(height: 10),
-                  Text('مرشدك السينمائي', style: TextStyle(
-                    fontSize: 14, color: _accent.withOpacity(0.8),
-                    fontWeight: FontWeight.w600, letterSpacing: 3,
-                  )),
-                  const SizedBox(height: 60),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(5, (i) => Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 3),
-                      width: 8, height: 8,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: _accent.withOpacity(_glowAnim.value * (i % 2 == 0 ? 1.0 : 0.4)),
-                      ),
+                    ]),
+                    const SizedBox(height: 32),
+                    Text('نيـــرو', style: TextStyle(
+                      fontSize: 48, fontWeight: FontWeight.w900,
+                      color: Colors.white, letterSpacing: 6,
+                      shadows: [Shadow(color: _accent.withOpacity(_glowAnim.value * 0.8), blurRadius: 20)],
                     )),
-                  ),
-                ],
+                    const SizedBox(height: 10),
+                    Text('مرشدك السينمائي', style: TextStyle(
+                      fontSize: 14, color: _accent.withOpacity(0.8),
+                      fontWeight: FontWeight.w600, letterSpacing: 3,
+                    )),
+                    const SizedBox(height: 60),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(5, (i) => Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        width: 8, height: 8,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: _accent.withOpacity(_glowAnim.value * (i % 2 == 0 ? 1.0 : 0.4)),
+                        ),
+                      )),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
         ),
       ),
     );
@@ -316,7 +322,7 @@ class MovieCard {
   final String genresEn;
   final String trailerUrl;
   final int tmdbId;
-  final String mediaType; 
+  final String mediaType;
 
   MovieCard({
     required this.titleAr, required this.titleEn,
@@ -369,7 +375,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   bool _isLoading = false;
   bool _hasResult = false;
   int _currentCard = 0;
-  bool _isResolvingWatchProviders = false;
 
   List<String> _homePosterUrls = [];
   int _currentPoster = 0;
@@ -397,6 +402,39 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     {'title': 'Squid Game',      'type': 'tv'},
     {'title': 'Death Note',      'type': 'tv'},
   ];
+
+  // Quick genre shortcuts shown on the home screen.
+  static const List<Map<String, String>> _quickGenresAr = [
+    {'name': 'أكشن',    'icon': 'flash'},
+    {'name': 'دراما',    'icon': 'drama'},
+    {'name': 'كوميديا',  'icon': 'smile'},
+    {'name': 'رعب',      'icon': 'ghost'},
+    {'name': 'رومانسي',  'icon': 'heart'},
+    {'name': 'أنمي',     'icon': 'anime'},
+    {'name': 'خيال علمي','icon': 'scifi'},
+  ];
+  static const List<Map<String, String>> _quickGenresEn = [
+    {'name': 'Action',     'icon': 'flash'},
+    {'name': 'Drama',      'icon': 'drama'},
+    {'name': 'Comedy',     'icon': 'smile'},
+    {'name': 'Horror',     'icon': 'ghost'},
+    {'name': 'Romance',    'icon': 'heart'},
+    {'name': 'Animation',  'icon': 'anime'},
+    {'name': 'Sci-Fi',     'icon': 'scifi'},
+  ];
+
+  IconData _iconFor(String key) {
+    switch (key) {
+      case 'flash': return Icons.bolt_rounded;
+      case 'drama': return Icons.theater_comedy_rounded;
+      case 'smile': return Icons.sentiment_satisfied_alt_rounded;
+      case 'ghost': return Icons.dark_mode_rounded;
+      case 'heart': return Icons.favorite_rounded;
+      case 'anime': return Icons.auto_awesome_rounded;
+      case 'scifi': return Icons.rocket_launch_rounded;
+      default: return Icons.category_rounded;
+    }
+  }
 
   AppStrings get s => AppStrings(_isArabic);
 
@@ -461,7 +499,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     for (final item in _featuredTitles) {
       try {
         final res = await http.get(Uri.parse(
-          '$_apiBase/tmdb/search/multi?query=${Uri.encodeComponent(item['type'] == 'movie' ? item['title']! : item['title']!)}&language=en-US',
+          '$_apiBase/tmdb/search/multi?query=${Uri.encodeComponent(item['title']!)}&language=en-US',
         ));
         if (res.statusCode == 200) {
           final results = jsonDecode(res.body)['results'] as List;
@@ -817,6 +855,29 @@ CRITICAL RULES:
     if (_pageController.hasClients) _pageController.jumpToPage(0);
   }
 
+  void _openWatchScreen(MovieCard movie) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WatchScreen(
+          title: _isArabic ? movie.titleAr : movie.titleEn,
+          posterUrl: movie.imageUrl,
+          isArabic: _isArabic,
+          showTitleForLookup: movie.titleEn.isNotEmpty ? movie.titleEn : movie.titleAr,
+        ),
+      ),
+    );
+  }
+
+  void _openGenre(String genreName) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BrowseScreen(isArabic: _isArabic, initialGenreName: genreName),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -825,43 +886,23 @@ CRITICAL RULES:
       drawer: _buildDrawer(),
       body: SafeArea(
         child: ResponsiveShell(
-          child: Stack(
-          children: [
-            Column(
-              children: [
-                _buildHeader(),
-                const SizedBox(height: 10),
-                Expanded(child: _buildMainContent()),
-                _buildSearchBar(),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: GestureDetector(
-                    onTap: _showAbout,
-                    child: const Text('© علي الأسدي',
-                      style: TextStyle(color: Colors.white24, fontSize: 11,
-                        decoration: TextDecoration.underline, decorationColor: Colors.white24)),
-                  ),
-                ),
-              ],
-            ),
-            if (_isResolvingWatchProviders)
-              Container(
-                color: Colors.black.withOpacity(0.6),
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const CircularProgressIndicator(color: _accent, strokeWidth: 3),
-                      const SizedBox(height: 16),
-                      Text(
-                        _isArabic ? 'جاري تجهيز رابط المشاهدة...' : 'Preparing the watch link...',
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ],
-                  ),
+          child: Column(
+            children: [
+              _buildHeader(),
+              if (!_hasResult && !_isLoading) _buildQuickGenres(),
+              const SizedBox(height: 10),
+              Expanded(child: _buildMainContent()),
+              _buildSearchBar(),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: GestureDetector(
+                  onTap: _showAbout,
+                  child: const Text('© علي الأسدي',
+                    style: TextStyle(color: Colors.white24, fontSize: 11,
+                      decoration: TextDecoration.underline, decorationColor: Colors.white24)),
                 ),
               ),
-          ],
+            ],
           ),
         ),
       ),
@@ -899,6 +940,65 @@ CRITICAL RULES:
           ),
         ],
       ),
+    );
+  }
+
+  // Horizontal quick-access row of genres shown on the home screen,
+  // so categories are always visible without opening the drawer.
+  Widget _buildQuickGenres() {
+    final genres = _isArabic ? _quickGenresAr : _quickGenresEn;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+          child: GestureDetector(
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BrowseScreen(isArabic: _isArabic))),
+            child: Row(
+              children: [
+                Icon(Icons.local_fire_department_rounded, color: _accent, size: 18),
+                const SizedBox(width: 6),
+                Text(s.exploreGenres, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                const Spacer(),
+                Icon(Icons.arrow_forward_ios_rounded, color: Colors.white24, size: 12),
+              ],
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 42,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: genres.length,
+            itemBuilder: (context, index) {
+              final g = genres[index];
+              return Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: GestureDetector(
+                  onTap: () => _openGenre(g['name']!),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: [_accent.withOpacity(0.18), Colors.white.withOpacity(0.03)]),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white.withOpacity(0.08)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(_iconFor(g['icon']!), color: _accent, size: 14),
+                        const SizedBox(width: 6),
+                        Text(g['name']!, style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -966,50 +1066,52 @@ CRITICAL RULES:
               ScrollConfiguration(
                 behavior: AppScrollBehavior(),
                 child: PageView.builder(
-                controller: _pageController,
-                itemCount: _movies.length,
-                onPageChanged: (i) => setState(() => _currentCard = i),
-                itemBuilder: (context, index) => _MovieCardWidget(
-                  movie: _movies[index],
-                  isFav: _favorites.any((m) => m.titleEn == _movies[index].titleEn),
-                  onFavTap: () => _toggleFavorite(_movies[index]),
-                  trailerLabel: s.trailer,
-                  isArabic: _isArabic,
-                  noTrailerMessage: s.noTrailer,
-                  trailerErrorMessage: s.trailerError,
-                  onShowMessage: _showMessage,
-                  seasonsLabel: s.seasonsAndEpisodes,
-                  onSeasonsTap: _movies[index].mediaType == 'tv'
-                      ? () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => SeasonsScreen(
-                                tmdbId: _movies[index].tmdbId,
-                                showTitle: _isArabic ? _movies[index].titleAr : _movies[index].titleEn,
-                                isArabic: _isArabic,
+                  controller: _pageController,
+                  itemCount: _movies.length,
+                  onPageChanged: (i) => setState(() => _currentCard = i),
+                  itemBuilder: (context, index) => _MovieCardWidget(
+                    movie: _movies[index],
+                    isFav: _favorites.any((m) => m.titleEn == _movies[index].titleEn),
+                    onFavTap: () => _toggleFavorite(_movies[index]),
+                    trailerLabel: s.trailer,
+                    isArabic: _isArabic,
+                    noTrailerMessage: s.noTrailer,
+                    trailerErrorMessage: s.trailerError,
+                    onShowMessage: _showMessage,
+                    seasonsLabel: s.seasonsAndEpisodes,
+                    onSeasonsTap: _movies[index].mediaType == 'tv'
+                        ? () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => SeasonsScreen(
+                                  tmdbId: _movies[index].tmdbId,
+                                  showTitle: _isArabic ? _movies[index].titleAr : _movies[index].titleEn,
+                                  showTitleEn: _movies[index].titleEn,
+                                  isArabic: _isArabic,
+                                ),
                               ),
+                            )
+                        : null,
+                    watchLabel: _movies[index].mediaType == 'movie' ? s.whereToWatch : s.watchShow,
+                    onWatchTap: () {
+                      if (_movies[index].mediaType == 'movie') {
+                        _openWatchScreen(_movies[index]);
+                      } else {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => SeasonsScreen(
+                              tmdbId: _movies[index].tmdbId,
+                              showTitle: _isArabic ? _movies[index].titleAr : _movies[index].titleEn,
+                              showTitleEn: _movies[index].titleEn,
+                              isArabic: _isArabic,
                             ),
-                          )
-                      : null,
-                  watchLabel: _movies[index].mediaType == 'movie' ? s.whereToWatch : s.watchShow,
-                  onWatchTap: () {
-                    if (_movies[index].mediaType == 'movie') {
-                      PlayerEngine.instance.openMovie(context, _movies[index].tmdbId);
-                    } else {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => SeasonsScreen(
-                            tmdbId: _movies[index].tmdbId,
-                            showTitle: _isArabic ? _movies[index].titleAr : _movies[index].titleEn,
-                            isArabic: _isArabic,
                           ),
-                        ),
-                      );
-                    }
-                  },
+                        );
+                      }
+                    },
+                  ),
                 ),
-              ),
               ),
               if (_currentCard < _movies.length - 1)
                 Positioned(right: 4, child: _NavArrow(icon: Icons.chevron_right_rounded, onTap: _nextCard)),
@@ -1510,6 +1612,19 @@ class _MovieCardWidget extends StatelessWidget {
             ),
             Positioned(
               top: 20, left: 20,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE50914),
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [BoxShadow(color: const Color(0xFFE50914).withOpacity(0.5), blurRadius: 10)],
+                ),
+                child: Text(isArabic ? 'حصري' : 'EXCLUSIVE',
+                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+              ),
+            ),
+            Positioned(
+              top: 20, right: 20,
               child: GestureDetector(
                 onTap: onFavTap,
                 child: Container(
@@ -1618,15 +1733,17 @@ class _MovieCardWidget extends StatelessWidget {
                     const SizedBox(height: 14),
                     SizedBox(
                       width: double.infinity,
-                      height: 40,
-                      child: OutlinedButton.icon(
+                      height: 44,
+                      child: ElevatedButton.icon(
                         onPressed: onWatchTap,
-                        icon: const Icon(Icons.live_tv_rounded, size: 18, color: Colors.white),
+                        icon: const Icon(Icons.play_circle_fill_rounded, size: 20, color: Colors.white),
                         label: Text(watchLabel,
-                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(color: Colors.white.withOpacity(0.3)),
+                          style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFE50914),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          elevation: 6,
+                          shadowColor: const Color(0xFFE50914).withOpacity(0.5),
                         ),
                       ),
                     ),
@@ -1637,6 +1754,268 @@ class _MovieCardWidget extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  WATCH SCREEN — servers (1-4) + inline video player
+// ═══════════════════════════════════════════════════════════
+class WatchScreen extends StatefulWidget {
+  final String title;
+  final String posterUrl;
+  final bool isArabic;
+  final String showTitleForLookup;
+  final int? season;
+  final int? episode;
+
+  const WatchScreen({
+    super.key,
+    required this.title,
+    required this.posterUrl,
+    required this.isArabic,
+    required this.showTitleForLookup,
+    this.season,
+    this.episode,
+  });
+
+  @override
+  State<WatchScreen> createState() => _WatchScreenState();
+}
+
+class _WatchScreenState extends State<WatchScreen> {
+  static const Color _accent = Color(0xFFE50914);
+  static const Color _darkBg = Color(0xFF050505);
+
+  int _activeServer = 1;
+  bool _isLoading = true;
+  bool _loadFailed = false;
+
+  // Server 1 is wired to the real VODU lookup. Servers 2-4 are placeholders
+  // ready to be filled with real URLs later — just set their value below.
+  final Map<int, String?> _serverUrls = {1: null, 2: null, 3: null, 4: null};
+
+  AppStrings get s => AppStrings(widget.isArabic);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadServer1();
+  }
+
+  Future<void> _loadServer1() async {
+    setState(() { _isLoading = true; _loadFailed = false; });
+    try {
+      final data = await ApiConfig.lookupVoduUrl(
+        widget.showTitleForLookup,
+        season: widget.season,
+        episode: widget.episode,
+      );
+      final url = (data['url'] ?? data['embedUrl'] ?? data['link'] ?? '').toString();
+      if (!mounted) return;
+      setState(() {
+        _serverUrls[1] = url.isNotEmpty ? url : null;
+        _isLoading = false;
+        _loadFailed = url.isEmpty;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() { _isLoading = false; _loadFailed = true; });
+    }
+  }
+
+  void _selectServer(int n) => setState(() => _activeServer = n);
+
+  Widget _buildPlayerArea() {
+    if (_activeServer == 1 && _isLoading) {
+      return _statusBox(
+        const CircularProgressIndicator(color: _accent, strokeWidth: 3),
+        s.loadingServer,
+      );
+    }
+    final url = _serverUrls[_activeServer];
+    if (url == null || url.isEmpty) {
+      return _statusBox(
+        const Icon(Icons.cloud_off_rounded, color: Colors.white24, size: 48),
+        s.serverUnavailable,
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: _NeroInlinePlayer(url: url),
+    );
+  }
+
+  Widget _statusBox(Widget icon, String text) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF141414),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            icon,
+            const SizedBox(height: 14),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(text, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white54, fontSize: 13)),
+            ),
+            if (_activeServer == 1 && _loadFailed) ...[
+              const SizedBox(height: 14),
+              OutlinedButton.icon(
+                onPressed: _loadServer1,
+                icon: const Icon(Icons.refresh_rounded, size: 16, color: Colors.white70),
+                label: Text(widget.isArabic ? 'إعادة المحاولة' : 'Retry',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                style: OutlinedButton.styleFrom(side: BorderSide(color: Colors.white.withOpacity(0.2))),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _serverChip(int n) {
+    final selected = _activeServer == n;
+    final available = (_serverUrls[n] ?? '')!.isNotEmpty;
+    return GestureDetector(
+      onTap: () => _selectServer(n),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        margin: const EdgeInsets.only(right: 10),
+        decoration: BoxDecoration(
+          color: selected ? _accent : const Color(0xFF141414),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: selected ? _accent : Colors.white.withOpacity(0.08)),
+          boxShadow: selected ? [BoxShadow(color: _accent.withOpacity(0.4), blurRadius: 12)] : null,
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.dns_rounded, size: 16, color: selected ? Colors.white : Colors.white38),
+          const SizedBox(width: 6),
+          Text('${s.serverLabel} $n',
+            style: TextStyle(color: selected ? Colors.white : Colors.white60, fontWeight: FontWeight.bold, fontSize: 13)),
+          if (!available && !(n == 1 && _isLoading)) ...[
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(6)),
+              child: Text(s.serverSoon, style: const TextStyle(color: Colors.white38, fontSize: 10)),
+            ),
+          ],
+        ]),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _darkBg,
+      appBar: AppBar(
+        backgroundColor: _darkBg, elevation: 0,
+        title: Text(widget.title,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+          overflow: TextOverflow.ellipsis),
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isWide = constraints.maxWidth > 900;
+
+          final serverRow = SizedBox(
+            height: 46,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [1, 2, 3, 4].map(_serverChip).toList(),
+            ),
+          );
+
+          final header = Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(children: [
+              Icon(Icons.live_tv_rounded, color: _accent, size: 18),
+              const SizedBox(width: 8),
+              Text(s.chooseServer, style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
+            ]),
+          );
+
+          final playerBlock = AspectRatio(aspectRatio: 16 / 9, child: _buildPlayerArea());
+
+          if (isWide) {
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1200),
+                child: Padding(
+                  padding: const EdgeInsets.all(28),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      playerBlock,
+                      const SizedBox(height: 22),
+                      header,
+                      const SizedBox(height: 12),
+                      serverRow,
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
+
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              playerBlock,
+              const SizedBox(height: 20),
+              header,
+              const SizedBox(height: 12),
+              serverRow,
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+// Embeds a playable URL as an <iframe> inside the Flutter Web canvas.
+class _NeroInlinePlayer extends StatefulWidget {
+  final String url;
+  const _NeroInlinePlayer({required this.url});
+
+  @override
+  State<_NeroInlinePlayer> createState() => _NeroInlinePlayerState();
+}
+
+class _NeroInlinePlayerState extends State<_NeroInlinePlayer> {
+  late final String _viewId;
+
+  @override
+  void initState() {
+    super.initState();
+    _viewId = 'nero-player-${DateTime.now().microsecondsSinceEpoch}-${widget.url.hashCode}';
+    ui_web.platformViewRegistry.registerViewFactory(_viewId, (int viewId) {
+      final iframe = html.IFrameElement()
+        ..src = widget.url
+        ..style.border = 'none'
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..allowFullscreen = true
+        ..allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+      return iframe;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: Colors.black,
+      child: HtmlElementView(viewType: _viewId),
     );
   }
 }
@@ -1696,11 +2075,13 @@ class EpisodeInfo {
 class SeasonsScreen extends StatefulWidget {
   final int tmdbId;
   final String showTitle;
+  final String showTitleEn;
   final bool isArabic;
 
   const SeasonsScreen({
     super.key, required this.tmdbId,
-    required this.showTitle, required this.isArabic,
+    required this.showTitle, required this.showTitleEn,
+    required this.isArabic,
   });
 
   @override
@@ -1734,7 +2115,7 @@ class _SeasonsScreenState extends State<SeasonsScreen> {
         final seasonsJson = (data['seasons'] as List?) ?? [];
         final seasons = seasonsJson
             .map((j) => SeasonInfo.fromJson(j))
-            .where((season) => season.seasonNumber > 0) 
+            .where((season) => season.seasonNumber > 0)
             .toList();
         if (!mounted) return;
         setState(() { _seasons = seasons; _isLoading = false; });
@@ -1792,6 +2173,7 @@ class _SeasonsScreenState extends State<SeasonsScreen> {
                             tmdbId: widget.tmdbId,
                             seasonNumber: season.seasonNumber,
                             showTitle: widget.showTitle,
+                            showTitleEn: widget.showTitleEn,
                             seasonName: season.name,
                             isArabic: widget.isArabic,
                           ),
@@ -1818,6 +2200,7 @@ class _SeasonTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const baseImgUrl = 'https://image.tmdb.org/t/p/w200';
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -1834,7 +2217,7 @@ class _SeasonTile extends StatelessWidget {
               borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
               child: season.posterPath.isNotEmpty
                   ? Image.network(
-                      'https://image.tmdb.org/t/p/w200${season.posterPath}',
+                      baseImgUrl + season.posterPath,
                       width: 80, height: 110, fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(
                         width: 80, height: 110, color: Colors.white10,
@@ -1883,12 +2266,14 @@ class EpisodesScreen extends StatefulWidget {
   final int tmdbId;
   final int seasonNumber;
   final String showTitle;
+  final String showTitleEn;
   final String seasonName;
   final bool isArabic;
 
   const EpisodesScreen({
     super.key, required this.tmdbId, required this.seasonNumber,
-    required this.showTitle, required this.seasonName, required this.isArabic,
+    required this.showTitle, required this.showTitleEn,
+    required this.seasonName, required this.isArabic,
   });
 
   @override
@@ -1933,6 +2318,22 @@ class _EpisodesScreenState extends State<EpisodesScreen> {
     }
   }
 
+  void _openWatchScreen(EpisodeInfo episode) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WatchScreen(
+          title: '${widget.showTitle} • ${s.episode} ${episode.episodeNumber}',
+          posterUrl: '',
+          isArabic: widget.isArabic,
+          showTitleForLookup: widget.showTitleEn.isNotEmpty ? widget.showTitleEn : widget.showTitle,
+          season: widget.seasonNumber,
+          episode: episode.episodeNumber,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1973,7 +2374,7 @@ class _EpisodesScreenState extends State<EpisodesScreen> {
                       episodeLabel: s.episode,
                       watchLabel: s.watchEpisode,
                       noOverviewLabel: s.noOverview,
-                      onTap: () => PlayerEngine.instance.openEpisode(context, widget.tmdbId, widget.seasonNumber, episode.episodeNumber),
+                      onTap: () => _openWatchScreen(episode),
                     );
                   },
                 );
@@ -1997,6 +2398,7 @@ class _EpisodeTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final overview = episode.overview.trim().isNotEmpty ? episode.overview : noOverviewLabel;
+    const baseStillUrl = 'https://image.tmdb.org/t/p/w300';
 
     return GestureDetector(
       onTap: onTap,
@@ -2016,7 +2418,7 @@ class _EpisodeTile extends StatelessWidget {
                 aspectRatio: 16 / 9,
                 child: episode.stillPath.isNotEmpty
                     ? Image.network(
-                        'https://image.tmdb.org/t/p/w300${episode.stillPath}',
+                        baseStillUrl + episode.stillPath,
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => Container(
                           color: Colors.white10,
@@ -2110,11 +2512,12 @@ class BrowseItem {
 
   factory BrowseItem.fromJson(Map<String, dynamic> j, String mediaType) {
     final poster = j['poster_path'] ?? '';
+    const baseUrl = 'https://image.tmdb.org/t/p/w342';
     return BrowseItem(
       tmdbId: j['id'] ?? 0,
       mediaType: mediaType,
       title: (mediaType == 'tv' ? j['name'] : j['title']) ?? '',
-      posterUrl: poster.isNotEmpty ? 'https://image.tmdb.org/t/p/w342$poster' : '',
+      posterUrl: poster.isNotEmpty ? baseUrl + poster : '',
       rating: (j['vote_average'] ?? 0.0).toDouble(),
     );
   }
@@ -2127,7 +2530,8 @@ enum BrowseSort { ratingDesc, ratingAsc, popularityDesc }
 // ═══════════════════════════════════════════════════════════
 class BrowseScreen extends StatefulWidget {
   final bool isArabic;
-  const BrowseScreen({super.key, required this.isArabic});
+  final String? initialGenreName;
+  const BrowseScreen({super.key, required this.isArabic, this.initialGenreName});
 
   @override
   State<BrowseScreen> createState() => _BrowseScreenState();
@@ -2137,8 +2541,8 @@ class _BrowseScreenState extends State<BrowseScreen> {
   static const Color _accent = Color(0xFFE50914);
   static const Color _darkBg = Color(0xFF050505);
 
-  String _mediaType = 'movie'; 
-  int? _selectedGenreId;       
+  String _mediaType = 'movie';
+  int? _selectedGenreId;
   BrowseSort _sort = BrowseSort.popularityDesc;
 
   List<GenreInfo> _genres = [];
@@ -2180,7 +2584,23 @@ class _BrowseScreenState extends State<BrowseScreen> {
         final genresJson = (data['genres'] as List?) ?? [];
         final genres = genresJson.map((j) => GenreInfo.fromJson(j)).toList();
         if (!mounted) return;
-        setState(() { _genres = genres; _isLoadingGenres = false; });
+
+        int? preselect;
+        if (widget.initialGenreName != null && _selectedGenreId == null) {
+          final target = widget.initialGenreName!.toLowerCase();
+          for (final g in genres) {
+            if (g.name.toLowerCase().contains(target) || target.contains(g.name.toLowerCase())) {
+              preselect = g.id;
+              break;
+            }
+          }
+        }
+
+        setState(() {
+          _genres = genres;
+          _isLoadingGenres = false;
+          if (preselect != null) _selectedGenreId = preselect;
+        });
         _loadItems(reset: true);
       } else {
         if (!mounted) return;
@@ -2551,6 +2971,21 @@ class _DetailScreenState extends State<DetailScreen> {
     );
   }
 
+  void _openWatchScreen() {
+    if (_movie == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WatchScreen(
+          title: widget.isArabic ? _movie!.titleAr : _movie!.titleEn,
+          posterUrl: _movie!.imageUrl,
+          isArabic: widget.isArabic,
+          showTitleForLookup: _movie!.titleEn.isNotEmpty ? _movie!.titleEn : _movie!.titleAr,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -2581,6 +3016,7 @@ class _DetailScreenState extends State<DetailScreen> {
                               builder: (_) => SeasonsScreen(
                                 tmdbId: _movie!.tmdbId,
                                 showTitle: widget.isArabic ? _movie!.titleAr : _movie!.titleEn,
+                                showTitleEn: _movie!.titleEn,
                                 isArabic: widget.isArabic,
                               ),
                             ),
@@ -2589,7 +3025,7 @@ class _DetailScreenState extends State<DetailScreen> {
                   watchLabel: _movie!.mediaType == 'movie' ? s.whereToWatch : s.watchShow,
                   onWatchTap: () {
                     if (_movie!.mediaType == 'movie') {
-                      PlayerEngine.instance.openMovie(context, _movie!.tmdbId);
+                      _openWatchScreen();
                     } else {
                       Navigator.push(
                         context,
@@ -2597,6 +3033,7 @@ class _DetailScreenState extends State<DetailScreen> {
                           builder: (_) => SeasonsScreen(
                             tmdbId: _movie!.tmdbId,
                             showTitle: widget.isArabic ? _movie!.titleAr : _movie!.titleEn,
+                            showTitleEn: _movie!.titleEn,
                             isArabic: widget.isArabic,
                           ),
                         ),
@@ -2649,7 +3086,7 @@ Future<MovieCard?> fetchTmdbDetailById(int tmdbId, String mediaType, {required A
     if (titleAr.trim().isEmpty) titleAr = titleEn;
     if (titleEn.trim().isEmpty) titleEn = titleAr;
 
-    if (titleAr.isEmpty && titleEn.isEmpty) return null; 
+    if (titleAr.isEmpty && titleEn.isEmpty) return null;
 
     try {
       final videoRes = await http.get(Uri.parse(
@@ -2669,10 +3106,11 @@ Future<MovieCard?> fetchTmdbDetailById(int tmdbId, String mediaType, {required A
       }
     } catch (_) {}
 
+    const basePosterPath = 'https://image.tmdb.org/t/p/w500';
     return MovieCard(
       titleAr: titleAr, titleEn: titleEn, year: year,
       story: story, storyEn: storyEn,
-      imageUrl: posterPath.isNotEmpty ? 'https://image.tmdb.org/t/p/w500$posterPath' : '',
+      imageUrl: posterPath.isNotEmpty ? basePosterPath + posterPath : '',
       rating: rating, genres: genres, genresEn: genresEn,
       trailerUrl: trailerUrl, tmdbId: tmdbId, mediaType: mediaType,
     );
